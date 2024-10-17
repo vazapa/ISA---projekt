@@ -1,8 +1,8 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11
-LDFLAGS = -lncurses
+LDFLAGS = -lncurses -lpcap
 TARGET = isa-top
-SRCS = isa-top.c
+SRCS = isa-top.c hashtable.c
 OBJS = $(SRCS:.c=.o)
 
 $(TARGET): $(OBJS)

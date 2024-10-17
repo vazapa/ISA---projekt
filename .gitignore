@@ -1,2 +1,9 @@
 isa-top
 isa-top.o
+test/test.o
+test/test.c
+test/test
+test/Makefile
+sniffer/sniffer.c
+sniffer/README.md
+sniffer/Makefile
