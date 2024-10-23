@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 #include <netinet/in.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 
 typedef struct connection_key {
     char src_ip[INET6_ADDRSTRLEN];
@@ -18,6 +22,7 @@ typedef struct connection_stats {
     uint64_t rx_packets;
     uint64_t tx_bytes;
     uint64_t tx_packets;
+    time_t update_time;
     struct connection_stats *next;
 } connection_stats_t;
 

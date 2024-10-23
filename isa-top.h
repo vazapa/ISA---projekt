@@ -10,5 +10,6 @@
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
 #include <signal.h>
+#include <time.h>
 
 #endif // ISA_TOP_H

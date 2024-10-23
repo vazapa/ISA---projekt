@@ -1,8 +1,5 @@
 #include "hashtable.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <netinet/in.h>
+#include "isa-top.h"
 
 #define HASH_SIZE 1024
 
@@ -21,6 +18,7 @@ unsigned int hash_function(connection_key_t *key) {
 void insert_or_update(connection_key_t *key, uint64_t bytes) {
     unsigned int hash_index = hash_function(key);
     connection_stats_t *current = hash_table[hash_index];
+    time_t now = time(NULL); // todo
 
     while (current != NULL) {
         if (strcmp(current->key.src_ip, key->src_ip) == 0 &&
@@ -30,6 +28,7 @@ void insert_or_update(connection_key_t *key, uint64_t bytes) {
             strcmp(current->key.protocol, key->protocol) == 0) {
             current->rx_bytes += bytes;
             current->rx_packets += 1;
+            current->update_time = now;
             return;
         }
         current = current->next;
@@ -37,6 +36,7 @@ void insert_or_update(connection_key_t *key, uint64_t bytes) {
 
     connection_stats_t *new_entry = (connection_stats_t *)malloc(sizeof(connection_stats_t));
     new_entry->key = *key;
+    new_entry->update_time = now;
     new_entry->rx_bytes = bytes;
     new_entry->rx_packets = 1;
     new_entry->tx_bytes = 0;

@@ -1,15 +1,45 @@
 #include "isa-top.h"
 #include "hashtable.h"
-// #include <hashtable.c>
+
+
 
 #define HASH_SIZE 1024
 
+/*
+Src IP:port                 Dst IP:port             Proto          Rx               Tx
+                                                                   b/s    p/s       b/s   p/s
+147.229.13.210:443          147.229.14.76:61027     tcp            130.8M 62.3k     10.2M 1.8K
+
+*/
+
+/*
+Todo
+
+- 2 zaznamy jednoho spojeni v hashtablu zaznamenat jako jeden
+- Urcit smer podle prvniho paketu
+- ??????????????Kazdou sekundu vymazat hashtable, znovu ho nacist a vypocitat rychlosti??????????????
+- Vymyslet jak pocitat pocet paketu za sekundu
+- Vymyslet jak pocitat pocet bitu za sekundu 
+- Printovat pouze 10 nejrycheljsich kazdou sekundu
+- Sortovat podle paketu/bitu
+
+
+*/
 
 pcap_t* pcap_handle;
 int header_length;
 int packets;
 char* interface = NULL;  // TODO vyresit cleaning a free
 connection_stats_t *hash_table[HASH_SIZE];
+
+void calcute_packet_perec(connection_stats_t *connection){
+    time_t now = time(NULL);
+    double time_difference = difftime(now,connection->update_time);
+
+    if(time_difference > 0){
+
+    }
+}
 
 pcap_t* create_pcap_handle(char* interface) // TODO edit
 {
@@ -111,14 +141,14 @@ void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_ch
     packetptr += 4 * ip_header->ip_hl;
     switch (ip_header->ip_p)
     {
-    // case IPPROTO_TCP:
+    case IPPROTO_TCP:
         tcp_header = (struct tcphdr*)packetptr;
         key.src_port = ntohs(tcp_header->th_sport);
         key.dst_port = ntohs(tcp_header->th_dport);
         strcpy(key.protocol, "tcp");
-
-    //     insert_or_update(&key, packethdr->len);
-    //     break;
+        // printf("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
+        // insert_or_update(&key, packethdr->len);
+        break;
  
     case IPPROTO_UDP:
         udp_header = (struct udphdr *)packetptr;
@@ -173,6 +203,8 @@ void stop_capture(int signo) //TODO edit
     
     // endwin();
     free(interface);
+    
+
     printf("aaaaaaaaaaaa ted fr koncim aaaaaaaaaaaa\n");
 
 
@@ -200,6 +232,8 @@ int main(int argc, char* argv[]){
     signal(SIGTERM, stop_capture);
     signal(SIGQUIT, stop_capture);
 
+
+    
 
     //Create packet capture handle.
     pcap_handle = create_pcap_handle(interface);
@@ -230,6 +264,8 @@ int main(int argc, char* argv[]){
     }
     
     free(interface);
+    
+    
 
     
     
