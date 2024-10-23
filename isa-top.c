@@ -90,40 +90,55 @@ void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_ch
     char ip_header_info[256];
     char source_ip[256];
     char destination_ip[256];
+
+    connection_key_t key;
  
 
     // Skip the datalink layer header and get the IP header fields.
     packetptr += header_length;
     ip_header = (struct ip*)packetptr;
+
     strcpy(source_ip, inet_ntoa(ip_header->ip_src));
     strcpy(destination_ip, inet_ntoa(ip_header->ip_dst));
-    sprintf(ip_header_info, "ID:%d TOS:0x%x, TTL:%d IpLen:%d DgLen:%d",
-            ntohs(ip_header->ip_id), ip_header->ip_tos, ip_header->ip_ttl,
-            4*ip_header->ip_hl, ntohs(ip_header->ip_len));
- 
+    // sprintf(ip_header_info, "ID:%d TOS:0x%x, TTL:%d IpLen:%d DgLen:%d",
+    //         ntohs(ip_header->ip_id), ip_header->ip_tos, ip_header->ip_ttl,
+    //         4*ip_header->ip_hl, ntohs(ip_header->ip_len));
+    strcpy(key.src_ip, source_ip);
+    strcpy(key.dst_ip, destination_ip);
+
     // Advance to the transport layer header then parse and display
     // the fields based on the type of hearder: tcp, udp or icmp.
-    packetptr += 4*ip_header->ip_hl;
+    packetptr += 4 * ip_header->ip_hl;
     switch (ip_header->ip_p)
     {
-    case IPPROTO_TCP:
+    // case IPPROTO_TCP:
         tcp_header = (struct tcphdr*)packetptr;
-        // packets += 1;
-        break;
+        key.src_port = ntohs(tcp_header->th_sport);
+        key.dst_port = ntohs(tcp_header->th_dport);
+        strcpy(key.protocol, "tcp");
+
+    //     insert_or_update(&key, packethdr->len);
+    //     break;
  
     case IPPROTO_UDP:
-        udp_header = (struct udphdr*)packetptr;
-        // packets += 1;
+        udp_header = (struct udphdr *)packetptr;
+        key.src_port = ntohs(udp_header->uh_sport);
+        key.dst_port = ntohs(udp_header->uh_dport);
+        strcpy(key.protocol, "udp");
+        // insert_or_update(&key, packethdr->len);
         break;
  
     case IPPROTO_ICMP:
         icmp_header = (struct icmp*)packetptr;
-        printf("ICMP %s -> %s\n", source_ip, destination_ip);
-        printf("%s\n", ip_header_info);
-        printf("Type:%d Code:%d ID:%d Seq:%d\n", icmp_header->icmp_type, icmp_header->icmp_code,
-               ntohs(icmp_header->icmp_hun.ih_idseq.icd_id), ntohs(icmp_header->icmp_hun.ih_idseq.icd_seq));
+        key.src_port = 0;
+        key.dst_port = 0;
+        strcpy(key.protocol, "icmp");
+        // printf("ICMP %s -> %s\n", source_ip, destination_ip);
+        // printf("%s\n", ip_header_info);
+        // printf("Type:%d Code:%d ID:%d Seq:%d\n", icmp_header->icmp_type, icmp_header->icmp_code,
+        //        ntohs(icmp_header->icmp_hun.ih_idseq.icd_id), ntohs(icmp_header->icmp_hun.ih_idseq.icd_seq));
         printf("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
-        packets += 1;
+        insert_or_update(&key, packethdr->len);
         break;
     }
 }
@@ -138,14 +153,29 @@ void stop_capture(int signo) //TODO edit
         printf("%d packets received by filter\n", stats.ps_recv); 
         printf("%d packets dropped\n\n", stats.ps_drop);
     }
+
+    if (pcap_handle != NULL) {
+        pcap_close(pcap_handle);
+        pcap_handle = NULL;
+    }
+
+    print_all_items();
+
+    for (int i = 0; i < HASH_SIZE; i++) {
+        connection_stats_t *current = hash_table[i];
+        while (current != NULL) {
+            connection_stats_t *next = current->next;
+            free(current);
+            current = next;
+        }
+        hash_table[i] = NULL;
+    }
     
-    endwin();
-
-    pcap_close(pcap_handle);
+    // endwin();
     free(interface);
-
-
     printf("aaaaaaaaaaaa ted fr koncim aaaaaaaaaaaa\n");
+
+
     exit(0);
 }
 
@@ -200,5 +230,8 @@ int main(int argc, char* argv[]){
     }
     
     free(interface);
+
+    
+    
     return 0;
 }

@@ -1,20 +1,15 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <ncurses.h>
-#include <string.h>
-#include <pcap/pcap.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
-#include <netinet/ip_icmp.h>
-#include <signal.h>
+#ifndef HASHTABLE_H
+#define HASHTABLE_H
 
+#include <stdint.h>
+#include <netinet/in.h>
 
 typedef struct connection_key {
     char src_ip[INET6_ADDRSTRLEN];
     char dst_ip[INET6_ADDRSTRLEN];
     uint16_t src_port;
     uint16_t dst_port;
-    uint8_t protocol;
+    char protocol[8]; // Use a string for protocol
 } connection_key_t;
 
 typedef struct connection_stats {
@@ -30,3 +25,6 @@ unsigned int hash_function(connection_key_t *key);
 void insert_or_update(connection_key_t *key, uint64_t bytes);
 connection_stats_t *find(connection_key_t *key);
 void delete(connection_key_t *key);
+void print_all_items();
+
+#endif // HASHTABLE_H

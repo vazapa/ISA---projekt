@@ -1,3 +1,6 @@
+#ifndef ISA_TOP_H
+#define ISA_TOP_H
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <ncurses.h>
@@ -7,3 +10,5 @@
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
 #include <signal.h>
+
+#endif // ISA_TOP_H
