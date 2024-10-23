@@ -5,6 +5,9 @@
 
 #define HASH_SIZE 1024
 
+
+
+
 /*
 Src IP:port                 Dst IP:port             Proto          Rx               Tx
                                                                    b/s    p/s       b/s   p/s
@@ -32,13 +35,43 @@ int packets;
 char* interface = NULL;  // TODO vyresit cleaning a free
 connection_stats_t *hash_table[HASH_SIZE];
 
-void calcute_packet_perec(connection_stats_t *connection){
+void calcute_packet_persec(connection_stats_t *connection){
     time_t now = time(NULL);
     double time_difference = difftime(now,connection->update_time);
 
     if(time_difference > 0){
 
     }
+}
+
+connection_stats_t merge(connection_stats_t *connection1,connection_stats_t *connection2){
+    /*
+    Src IP: 192.168.0.119, Src Port: 0, Dst IP: 8.8.8.8, Dst Port: 0, Protocol: icmp, Rx Bytes: 980, Rx Packets: 10, Tx Bytes: 0, Tx Packets: 0
+    Src IP: 8.8.8.8, Src Port: 0, Dst IP: 192.168.0.119, Dst Port: 0, Protocol: icmp, Rx Bytes: 1078, Rx Packets: 11, Tx Bytes: 0, Tx Packets: 0
+    Src IP: 192.168.0.119, Src Port: 0, Dst IP: 8.8.8.8, Dst Port: 0, Protocol: icmp, Rx Bytes: 980, Rx Packets: 10, Tx Bytes: 1078, Tx Packets: 11
+    */
+    
+    connection_stats_t merged_connection;
+
+    // Kopírování klíčových hodnot (src/dst IP, porty, protokol)
+    strcpy(merged_connection.key.src_ip, connection1->key.src_ip);
+    merged_connection.key.src_port = connection1->key.src_port;
+    strcpy(merged_connection.key.dst_ip, connection1->key.dst_ip);
+    merged_connection.key.dst_port = connection1->key.dst_port;
+    strcpy(merged_connection.key.protocol, connection1->key.protocol);
+
+    // Rx (přijaté) statistiky pro první spojení
+    merged_connection.tx_packets = connection1->tx_packets;
+    merged_connection.tx_bytes = connection1->tx_bytes;
+
+    // Tx (odeslané) statistiky pro druhé spojení (druhá strana komunikace)
+    merged_connection.rx_packets = connection2->tx_packets;  // Odpovídá přijatým z druhé strany
+    merged_connection.rx_bytes = connection2->tx_bytes;      // Odpovídá přijatým bajtům z druhé strany
+
+
+    
+
+    return merged_connection;
 }
 
 pcap_t* create_pcap_handle(char* interface) // TODO edit
@@ -147,7 +180,7 @@ void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_ch
         key.dst_port = ntohs(tcp_header->th_dport);
         strcpy(key.protocol, "tcp");
         // printf("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
-        // insert_or_update(&key, packethdr->len);
+        insert_or_update(&key, packethdr->len);
         break;
  
     case IPPROTO_UDP:
@@ -167,8 +200,8 @@ void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_ch
         // printf("%s\n", ip_header_info);
         // printf("Type:%d Code:%d ID:%d Seq:%d\n", icmp_header->icmp_type, icmp_header->icmp_code,
         //        ntohs(icmp_header->icmp_hun.ih_idseq.icd_id), ntohs(icmp_header->icmp_hun.ih_idseq.icd_seq));
-        printf("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
-        insert_or_update(&key, packethdr->len);
+        // printf("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
+        // insert_or_update(&key, packethdr->len);
         break;
     }
 }
@@ -190,6 +223,7 @@ void stop_capture(int signo) //TODO edit
     }
 
     print_all_items();
+    
 
     for (int i = 0; i < HASH_SIZE; i++) {
         connection_stats_t *current = hash_table[i];
