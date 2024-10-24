@@ -68,9 +68,7 @@ connection_stats_t merge(connection_stats_t *connection1,connection_stats_t *con
     merged_connection.rx_packets = connection2->tx_packets;  // Odpovídá přijatým z druhé strany
     merged_connection.rx_bytes = connection2->tx_bytes;      // Odpovídá přijatým bajtům z druhé strany
 
-
     
-
     return merged_connection;
 }
 
@@ -180,7 +178,7 @@ void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_ch
         key.dst_port = ntohs(tcp_header->th_dport);
         strcpy(key.protocol, "tcp");
         // printf("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
-        insert_or_update(&key, packethdr->len);
+        // insert_or_update(&key, packethdr->len);
         break;
  
     case IPPROTO_UDP:
@@ -201,7 +199,7 @@ void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_ch
         // printf("Type:%d Code:%d ID:%d Seq:%d\n", icmp_header->icmp_type, icmp_header->icmp_code,
         //        ntohs(icmp_header->icmp_hun.ih_idseq.icd_id), ntohs(icmp_header->icmp_hun.ih_idseq.icd_seq));
         // printf("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
-        // insert_or_update(&key, packethdr->len);
+        insert_or_update(&key, packethdr->len);
         break;
     }
 }
