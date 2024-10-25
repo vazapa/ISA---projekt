@@ -11,6 +11,10 @@
 #include <netinet/ip_icmp.h>
 #include <signal.h>
 #include <time.h>
+#include <pthread.h>
+#include <unistd.h>
+
+
 #include "hashtable.h"
 
 connection_stats_t merge(connection_stats_t *connection1,connection_stats_t *connection2);

@@ -56,7 +56,7 @@ void insert_or_update(connection_key_t *key, uint64_t bytes) {
             current->key.src_port == key->src_port &&
             current->key.dst_port == key->dst_port &&
             strcmp(current->key.protocol, key->protocol) == 0) {
-            current->tx_bytes += bytes;
+            current->tx_bytes += bytes - 14; //todo odstranit -14
             current->tx_packets += 1;
             current->update_time = now;
             return;
@@ -70,7 +70,7 @@ void insert_or_update(connection_key_t *key, uint64_t bytes) {
     new_entry->update_time = now;
     new_entry->rx_bytes = 0;
     new_entry->rx_packets = 0;
-    new_entry->tx_bytes = bytes;
+    new_entry->tx_bytes = bytes - 14; //todo odstranit -14
     new_entry->tx_packets = 1;
     new_entry->next = hash_table[hash_index];
     hash_table[hash_index] = new_entry;
@@ -126,34 +126,8 @@ void print_all_items() {
     for (int i = 0; i < HASH_SIZE; i++) {
         connection_stats_t *current = hash_table[i];
         while (current != NULL) {
-            connection_key_t sec_connection;
-            strcpy(sec_connection.src_ip,current->key.dst_ip);
-            sec_connection.src_port = current->key.dst_port;
-            strcpy(sec_connection.dst_ip,current->key.src_ip);
-            sec_connection.dst_port = current->key.src_port;
-            strcpy(sec_connection.protocol,current->key.protocol);
-
-            connection_stats_t *found_connection = find(&sec_connection);
-            // if(current->key.src_port == 80 || current->key.dst_port == 80){
-                if(found_connection != NULL){
-
-                    connection_stats_t merged_connection = merge(current,found_connection);
-                    // if(merged_connection.key.dst_ip == 80 || merged_connection.key.dst_port == 80){
-                        //printf("Printuju: t_packets:%d t_bytes:%d r_packets:%d r_bytes:%d \n",merged_connection.tx_packets,merged_connection.tx_bytes, merged_connection.rx_packets,merged_connection.rx_bytes);
-                    // }
-                    insert_merged(&merged_connection,hash_function(&merged_connection.key));
-                    // printf("nasel jsem counter connection\n");
-                    // printf("Src IP: %s, Src Port: %d, Dst IP: %s, Dst Port: %d, Protocol: %s, Rx Bytes: %lu, Rx Packets: %lu, Tx Bytes: %lu, Tx Packets: %lu\n",
-                    //     merged_connection.key.src_ip, merged_connection.key.src_port,
-                    //     merged_connection.key.dst_ip, merged_connection.key.dst_port,
-                    //     merged_connection.key.protocol,
-                    //     merged_connection.rx_bytes, merged_connection.rx_packets,
-                    //     merged_connection.tx_bytes, merged_connection.tx_packets);
-
-                    // Delete the reverse connection to avoid duplicate printing)
-                    delete(&sec_connection);
-                }
-                   if(strcmp( current->key.src_ip,"8.8.8.8") == 0){ 
+            
+                //    if(strcmp( current->key.src_ip,"8.8.8.8") == 0 || strcmp( current->key.dst_ip,"8.8.8.8") == 0){ 
                 // if(current->key.src_port == 80 || current->key.dst_port == 80){
 
                     printf("Src IP: %s, Src Port: %d, Dst IP: %s, Dst Port: %d, Protocol: %s, Rx Bytes: %lu, Rx Packets: %lu, Tx Bytes: %lu, Tx Packets: %lu\n",
@@ -162,7 +136,7 @@ void print_all_items() {
                         current->key.protocol,
                         current->rx_bytes, current->rx_packets,
                         current->tx_bytes, current->tx_packets);
-                }
+                // }
             // }
             current = current->next;
         }

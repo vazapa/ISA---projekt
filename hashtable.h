@@ -30,6 +30,7 @@ unsigned int hash_function(connection_key_t *key);
 void insert_or_update(connection_key_t *key, uint64_t bytes);
 connection_stats_t *find(connection_key_t *key);
 void delete(connection_key_t *key);
+void insert_merged(connection_stats_t *merged, unsigned int hash_index);
 void print_all_items();
 
 #endif // HASHTABLE_H

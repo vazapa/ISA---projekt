@@ -44,6 +44,79 @@ void calcute_packet_persec(connection_stats_t *connection){
     }
 }
 
+void print_top_connections() {
+    // Clear the screen and print header
+    clear();
+    printw("Src IP:port                 Dst IP:port             Proto          Rx               Tx\n");
+    printw("                                                                   b/s    p/s       b/s   p/s\n");
+
+    // Iterate over the hashtable and collect active connections
+    connection_stats_t *top_connections[10];  // Array to store top 10 connections
+    int count = 0;
+
+    for (int i = 0; i < HASH_SIZE; i++) {
+        connection_stats_t *current = hash_table[i];
+        while (current != NULL) {
+
+            connection_key_t sec_connection;
+            strcpy(sec_connection.src_ip,current->key.dst_ip);
+            sec_connection.src_port = current->key.dst_port;
+            strcpy(sec_connection.dst_ip,current->key.src_ip);
+            sec_connection.dst_port = current->key.src_port;
+            strcpy(sec_connection.protocol,current->key.protocol);
+
+            connection_stats_t *found_connection = find(&sec_connection);
+                if(found_connection != NULL){
+
+                    connection_stats_t merged_connection = merge(current,found_connection);
+                    insert_merged(&merged_connection,hash_function(&merged_connection.key));
+                    
+                 //   delete(&sec_connection);
+                }
+
+            // Sort and store only top 10 connections
+            if (count < 10) {
+                top_connections[count++] = current;
+            } else {
+                // Implement sorting logic to keep only the top 10 connections
+                for (int j = 0; j < 10; j++) {
+                    // if (/* sorting condition, e.g., current->rx_bytes > top_connections[j]->rx_bytes */) {
+                        top_connections[j] = current;
+                        break;
+                    // }
+                }
+            }
+            current = current->next;
+        }
+    }
+
+    // Print each of the top connections
+    for (int i = 0; i < count; i++) {
+        connection_stats_t *conn = top_connections[i];
+        // if(conn->key.src_port == 80 || conn->key.dst_port == 80){
+        if(strcmp( conn->key.src_ip,"8.8.8.8") == 0 || strcmp( conn->key.dst_ip,"8.8.8.8") == 0){ 
+
+        printw("%s:%d          %s:%d                  %s           %lu    %lu          %lu    %lu\n",
+               conn->key.src_ip, conn->key.src_port,
+               conn->key.dst_ip, conn->key.dst_port,
+               conn->key.protocol,
+               conn->rx_bytes , conn->rx_packets,
+               conn->tx_bytes , conn->tx_packets);
+    }
+    }
+    // refresh();
+}
+
+void* display_loop(void *args) {
+    while (1) {
+        print_top_connections();
+        refresh();
+        sleep(1);
+    }
+    return NULL;
+}
+
+
 connection_stats_t merge(connection_stats_t *connection1,connection_stats_t *connection2){
     /*
     Src IP: 192.168.0.119, Src Port: 0, Dst IP: 8.8.8.8, Dst Port: 0, Protocol: icmp, Rx Bytes: 980, Rx Packets: 10, Tx Bytes: 0, Tx Packets: 0
@@ -207,6 +280,7 @@ void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_ch
 
 void stop_capture(int signo) //TODO edit
 {
+    
     struct pcap_stat stats;
  
     if (pcap_stats(pcap_handle, &stats) >= 0) {
@@ -220,7 +294,6 @@ void stop_capture(int signo) //TODO edit
         pcap_handle = NULL;
     }
 
-    print_all_items();
     
 
     for (int i = 0; i < HASH_SIZE; i++) {
@@ -233,8 +306,10 @@ void stop_capture(int signo) //TODO edit
         hash_table[i] = NULL;
     }
     
-    // endwin();
+    endwin();
     free(interface);
+    print_all_items();
+
     
 
     printf("aaaaaaaaaaaa ted fr koncim aaaaaaaaaaaa\n");
@@ -245,6 +320,13 @@ void stop_capture(int signo) //TODO edit
 
 int main(int argc, char* argv[]){
     char *interface = malloc(sizeof(char*)); // zmenit 
+
+    // Initialize ncurses
+    initscr();
+    cbreak();
+    noecho();
+    scrollok(stdscr, TRUE);
+
 
     if (argc < 3 || argc > 3) {
         free(interface) ;
@@ -281,13 +363,9 @@ int main(int argc, char* argv[]){
         return -1;
     }
     
-     // Initialize ncurses
-    // initscr();
-    // cbreak(); // Disable line buffering
-    // noecho(); // Don't echo input
-    // scrollok(stdscr, TRUE); // Allow scrolling
-    // printw("Listening for ICMP packets...\n");
-    // refresh();
+     // Start the ncurses display loop in a separate thread
+    pthread_t display_thread;
+    pthread_create(&display_thread, NULL, display_loop, NULL);
 
     // Start the packet capture with a set count or continually if the count is 0.
     if (pcap_loop(pcap_handle, -1, packet_handler, (u_char*)NULL) == PCAP_ERROR) {
@@ -295,7 +373,8 @@ int main(int argc, char* argv[]){
         return -1;
     }
     
-    free(interface);
+    
+    
     
     
 
