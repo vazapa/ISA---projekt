@@ -48,7 +48,7 @@ void insert_merged(connection_stats_t *merged, unsigned int hash_index) {
 void insert_or_update(connection_key_t *key, uint64_t bytes) {
     unsigned int hash_index = hash_function(key);
     connection_stats_t *current = hash_table[hash_index];
-    time_t now = time(NULL); // todo
+    
 
     while (current != NULL) {
         if (strcmp(current->key.src_ip, key->src_ip) == 0 &&
@@ -58,7 +58,7 @@ void insert_or_update(connection_key_t *key, uint64_t bytes) {
             strcmp(current->key.protocol, key->protocol) == 0) {
             current->tx_bytes += bytes - 14; //todo odstranit -14
             current->tx_packets += 1;
-            current->update_time = now;
+            current->update_time = time(NULL); // todo;
             return;
         }
         current = current->next;
@@ -67,12 +67,16 @@ void insert_or_update(connection_key_t *key, uint64_t bytes) {
 
     connection_stats_t *new_entry = (connection_stats_t *)malloc(sizeof(connection_stats_t));
     new_entry->key = *key;
-    new_entry->update_time = now;
+    new_entry->update_time = time(NULL); // todo;
     new_entry->rx_bytes = 0;
     new_entry->rx_packets = 0;
     new_entry->tx_bytes = bytes - 14; //todo odstranit -14
     new_entry->tx_packets = 1;
     new_entry->next = hash_table[hash_index];
+    new_entry->tx_speed = 0;
+    new_entry->rx_speed = 0;
+    new_entry->rx_packet_speed = 0;
+    new_entry->tx_packet_speed = 0;
     hash_table[hash_index] = new_entry;
     
     

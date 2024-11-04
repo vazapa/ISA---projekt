@@ -5,7 +5,11 @@
 
 #define HASH_SIZE 1024
 
-
+#define SRC_IP_PORT_WIDTH 25
+#define DST_IP_PORT_WIDTH 25
+#define PROTO_WIDTH 10
+#define RX_WIDTH 11
+#define TX_WIDTH 11
 
 
 /*
@@ -35,20 +39,55 @@ int packets;
 char* interface = NULL;  // TODO vyresit cleaning a free
 connection_stats_t *hash_table[HASH_SIZE];
 
-void calcute_packet_persec(connection_stats_t *connection){
+void update_speed(connection_stats_t *conn){
     time_t now = time(NULL);
-    double time_difference = difftime(now,connection->update_time);
+    double time_difference = difftime(now, conn->update_time);
 
-    if(time_difference > 0){
-
-    }
+    // if (time_difference != 0) {  // Only update if at least one second has passed
+        conn->rx_speed = ((conn->rx_bytes) ) / (time_difference + 1) ;
+        if(conn->rx_speed > 1000){
+            conn->rx_speed = conn->rx_speed / 1000;
+        }
+        else if(conn->rx_speed > 1000000){
+            conn->rx_speed = conn->rx_speed / 1000000;
+        }
+        conn->tx_speed = ((conn->tx_bytes) ) / (time_difference + 1);
+        if(conn->tx_speed > 1000){
+            conn->tx_speed = conn->tx_speed / 1000;
+        }
+        else if(conn->tx_speed > 1000000){
+            conn->tx_speed = conn->tx_speed / 1000000;
+        }
+        conn->rx_packet_speed = conn->rx_packets / (time_difference + 1);
+        conn->tx_packet_speed = conn->tx_packets / (time_difference + 1);
+        // if(conn->rx_speed >= 0 && conn->tx_speed >= 0 ){
+        
+        //     printw("SPEED t:%d   r:%d rozdil:%d\n",conn->tx_speed,conn->rx_speed,time_difference);
+        // }
+        // Reset for next calculation period
+        conn->rx_bytes = 0;
+        conn->tx_bytes = 0;
+        conn->tx_packets = 0;
+        conn->rx_packets = 0;
+        conn->update_time = now;
+    // }
 }
 
 void print_top_connections() {
     // Clear the screen and print header
     clear();
-    printw("Src IP:port                 Dst IP:port             Proto          Rx               Tx\n");
-    printw("                                                                   b/s    p/s       b/s   p/s\n");
+    // printw("Src IP:port        |         Dst IP:port       |      Proto     |     Rx            |       Tx\n");
+    // printw("                                                                      b/s    p/s    |       b/s   p/s\n");
+    printw("%-*s %-*s %-*s %-*s %-*s\n",
+           SRC_IP_PORT_WIDTH, "Src IP:port",
+           DST_IP_PORT_WIDTH, "Dst IP:port",
+           PROTO_WIDTH, "Proto",
+           RX_WIDTH, "Rx",
+           TX_WIDTH, "Tx");
+    printw("%*s %*s %*s %*s\n",
+           SRC_IP_PORT_WIDTH + DST_IP_PORT_WIDTH + PROTO_WIDTH, "",
+           RX_WIDTH, "b/s   p/s",
+           TX_WIDTH, "b/s   p/s");
 
     // Iterate over the hashtable and collect active connections
     connection_stats_t *top_connections[10];  // Array to store top 10 connections
@@ -57,6 +96,7 @@ void print_top_connections() {
     for (int i = 0; i < HASH_SIZE; i++) {
         connection_stats_t *current = hash_table[i];
         while (current != NULL) {
+            
 
             connection_key_t sec_connection;
             strcpy(sec_connection.src_ip,current->key.dst_ip);
@@ -71,9 +111,9 @@ void print_top_connections() {
                     connection_stats_t merged_connection = merge(current,found_connection);
                     insert_merged(&merged_connection,hash_function(&merged_connection.key));
                     
-                 //   delete(&sec_connection);
+                   delete(&sec_connection);
                 }
-
+            update_speed(current);
             // Sort and store only top 10 connections
             if (count < 10) {
                 top_connections[count++] = current;
@@ -93,16 +133,34 @@ void print_top_connections() {
     // Print each of the top connections
     for (int i = 0; i < count; i++) {
         connection_stats_t *conn = top_connections[i];
-        // if(conn->key.src_port == 80 || conn->key.dst_port == 80){
-        if(strcmp( conn->key.src_ip,"8.8.8.8") == 0 || strcmp( conn->key.dst_ip,"8.8.8.8") == 0){ 
 
-        printw("%s:%d          %s:%d                  %s           %lu    %lu          %lu    %lu\n",
-               conn->key.src_ip, conn->key.src_port,
-               conn->key.dst_ip, conn->key.dst_port,
-               conn->key.protocol,
-               conn->rx_bytes , conn->rx_packets,
-               conn->tx_bytes , conn->tx_packets);
-    }
+        if(conn->rx_speed != 0 && conn->tx_speed != 0 ){
+        // if(conn->key.src_port == 443 || conn->key.dst_port == 443){
+        // if(strcmp( conn->key.src_ip,"8.8.8.8") == 0 || strcmp( conn->key.dst_ip,"8.8.8.8") == 0 || conn->key.src_port == 80 || conn->key.dst_port == 80){ 
+        // if(strcmp( conn->key.src_ip,"8.8.8.8") == 0 || strcmp( conn->key.dst_ip,"8.8.8.8") == 0){
+
+            // printw("%s:%d        |         %s:%d       |      %s           %lu    %lu        %lu    %lu\n",
+            //     conn->key.src_ip, conn->key.src_port,
+            //     conn->key.dst_ip, conn->key.dst_port,
+            //     conn->key.protocol,
+            //     conn->rx_speed , conn->rx_packet_speed,
+            //     conn->tx_speed , conn->tx_packet_speed);
+            char src_ip_port[SRC_IP_PORT_WIDTH];
+                char dst_ip_port[DST_IP_PORT_WIDTH];
+
+        snprintf(src_ip_port, SRC_IP_PORT_WIDTH, "%s:%d", conn->key.src_ip, conn->key.src_port);
+        snprintf(dst_ip_port, DST_IP_PORT_WIDTH, "%s:%d", conn->key.dst_ip, conn->key.dst_port);
+
+        printw("%-*s %-*s %-*s %lu  %lu       %lu   %lu\n",
+               SRC_IP_PORT_WIDTH, src_ip_port,
+               DST_IP_PORT_WIDTH, dst_ip_port,
+               PROTO_WIDTH, conn->key.protocol,
+               conn->rx_speed , 
+               conn->rx_packet_speed,
+               conn->tx_speed, 
+               conn->tx_packet_speed);
+        }
+        // }
     }
     // refresh();
 }
@@ -140,6 +198,7 @@ connection_stats_t merge(connection_stats_t *connection1,connection_stats_t *con
     // Tx (odeslané) statistiky pro druhé spojení (druhá strana komunikace)
     merged_connection.rx_packets = connection2->tx_packets;  // Odpovídá přijatým z druhé strany
     merged_connection.rx_bytes = connection2->tx_bytes;      // Odpovídá přijatým bajtům z druhé strany
+    merged_connection.update_time = connection1->update_time;
 
     
     return merged_connection;
@@ -251,7 +310,7 @@ void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_ch
         key.dst_port = ntohs(tcp_header->th_dport);
         strcpy(key.protocol, "tcp");
         // printf("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
-        // insert_or_update(&key, packethdr->len);
+        insert_or_update(&key, packethdr->len);
         break;
  
     case IPPROTO_UDP:
@@ -259,7 +318,7 @@ void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_ch
         key.src_port = ntohs(udp_header->uh_sport);
         key.dst_port = ntohs(udp_header->uh_dport);
         strcpy(key.protocol, "udp");
-        // insert_or_update(&key, packethdr->len);
+        insert_or_update(&key, packethdr->len);
         break;
  
     case IPPROTO_ICMP:

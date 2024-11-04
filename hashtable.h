@@ -23,6 +23,10 @@ typedef struct connection_stats {
     uint64_t tx_bytes;
     uint64_t tx_packets;
     time_t update_time;
+    time_t tx_speed;
+    time_t tx_packet_speed;
+    time_t rx_speed;
+    time_t rx_packet_speed;
     struct connection_stats *next;
 } connection_stats_t;
 

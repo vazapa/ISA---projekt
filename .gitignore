@@ -7,3 +7,12 @@ test/Makefile
 sniffer/sniffer.c
 sniffer/README.md
 sniffer/Makefile
+.vscode/settings.json
+.DS_Store
+hashtable.o
+manual.aux
+manual.fdb_latexmk
+manual.fls
+manual.log
+manual.out
+manual.synctex.gz

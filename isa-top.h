@@ -23,5 +23,6 @@ void get_link_header_len(pcap_t* handle);
 void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_char *packetptr);
 void stop_capture(int signo);
 int main(int argc, char* argv[]);
+void update_speed(connection_stats_t *conn);
 
 #endif // ISA_TOP_H
