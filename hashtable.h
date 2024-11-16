@@ -8,6 +8,7 @@
 #include <string.h>
 
 
+
 typedef struct connection_key {
     char src_ip[INET6_ADDRSTRLEN];
     char dst_ip[INET6_ADDRSTRLEN];
@@ -28,6 +29,8 @@ typedef struct connection_stats {
     time_t rx_speed;
     time_t rx_packet_speed;
     struct connection_stats *next;
+    time_t last_active;
+
 } connection_stats_t;
 
 unsigned int hash_function(connection_key_t *key);

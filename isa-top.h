@@ -13,6 +13,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <netinet/ip6.h>
 
 
 #include "hashtable.h"
@@ -24,5 +25,7 @@ void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_ch
 void stop_capture(int signo);
 int main(int argc, char* argv[]);
 void update_speed(connection_stats_t *conn);
+int compare(const void *a, const void *b);
+
 
 #endif // ISA_TOP_H

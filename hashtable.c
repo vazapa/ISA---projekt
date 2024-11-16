@@ -68,6 +68,7 @@ void insert_or_update(connection_key_t *key, uint64_t bytes) {
     connection_stats_t *new_entry = (connection_stats_t *)malloc(sizeof(connection_stats_t));
     new_entry->key = *key;
     new_entry->update_time = time(NULL); // todo;
+    new_entry->last_active = time(NULL); 
     new_entry->rx_bytes = 0;
     new_entry->rx_packets = 0;
     new_entry->tx_bytes = bytes - 14; //todo odstranit -14
@@ -78,7 +79,7 @@ void insert_or_update(connection_key_t *key, uint64_t bytes) {
     new_entry->rx_packet_speed = 0;
     new_entry->tx_packet_speed = 0;
     hash_table[hash_index] = new_entry;
-    
+
     
     
 }

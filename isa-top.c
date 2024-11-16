@@ -5,11 +5,13 @@
 
 #define HASH_SIZE 1024
 
-#define SRC_IP_PORT_WIDTH 25
-#define DST_IP_PORT_WIDTH 25
+#define SRC_IP_PORT_WIDTH 45
+#define DST_IP_PORT_WIDTH 55
 #define PROTO_WIDTH 10
-#define RX_WIDTH 11
-#define TX_WIDTH 11
+#define RX_WIDTH 15
+#define TX_WIDTH 15
+#define SPEED_WIDTH 8   // Add new constant for speed values
+#define PKT_WIDTH 6     // Add new constant for packet counts
 
 
 /*
@@ -21,56 +23,124 @@ Src IP:port                 Dst IP:port             Proto          Rx           
 
 /*
 Todo
-
-- 2 zaznamy jednoho spojeni v hashtablu zaznamenat jako jeden
-- Urcit smer podle prvniho paketu
-- ??????????????Kazdou sekundu vymazat hashtable, znovu ho nacist a vypocitat rychlosti??????????????
-- Vymyslet jak pocitat pocet paketu za sekundu
-- Vymyslet jak pocitat pocet bitu za sekundu 
-- Printovat pouze 10 nejrycheljsich kazdou sekundu
-- Sortovat podle paketu/bitu
-
+- Sortovat podle paketu/bitu todo kontrola
+- Merge funkce spojuje spatne!!!!!!!!! 2 ruzne pingy na google a 8.8.8.8 a zacne si to zrat navzajem
+- pri local host atd proste stejnych IP se to pricita spatne todo
+- todo mizi icmp kdyz je hodne connections
 
 */
+
+#define KILO 1000ULL
+#define MEGA (KILO * 1000ULL)
+#define GIGA (MEGA * 1000ULL)
+
+void format_packet_count(uint64_t packets, char *buffer, size_t buffer_size) {
+    if (packets >= KILO) {
+        double formatted = packets / (double)KILO;
+        if (formatted >= 100) {
+            snprintf(buffer, buffer_size, "%3.0fK", formatted);
+        } else if (formatted >= 10) {
+            snprintf(buffer, buffer_size, "%4.1fK", formatted);
+        } else {
+            snprintf(buffer, buffer_size, "%4.1fK", formatted);
+        }
+    } else {
+        snprintf(buffer, buffer_size, "%4.0f", (double)packets);
+    }
+}
+
+// Add this helper function
+void format_network_speed(uint64_t speed, char *buffer, size_t buffer_size) {
+    double formatted_speed;
+    const char *unit;
+
+    if (speed >= GIGA) {
+        formatted_speed = speed / (double)GIGA;
+        unit = "G";
+    } else if (speed >= MEGA) {
+        formatted_speed = speed / (double)MEGA;
+        unit = "M";
+    } else if (speed >= KILO) {
+        formatted_speed = speed / (double)KILO;
+        unit = "K";
+    } else {
+        formatted_speed = speed;
+        unit = " ";
+    }
+
+    // Format with appropriate precision
+    if (formatted_speed >= 100) {
+        snprintf(buffer, buffer_size, "%3.0f%s", formatted_speed, unit);
+    } else if (formatted_speed >= 10) {
+        snprintf(buffer, buffer_size, "%4.1f%s", formatted_speed, unit);
+    } else {
+        snprintf(buffer, buffer_size, "%4.2f%s", formatted_speed, unit);
+    }
+}
 
 pcap_t* pcap_handle;
 int header_length;
 int packets;
 char* interface = NULL;  // TODO vyresit cleaning a free
 connection_stats_t *hash_table[HASH_SIZE];
+char* order = NULL;
 
-void update_speed(connection_stats_t *conn){
+void update_speed(connection_stats_t *conn) {
     time_t now = time(NULL);
     double time_difference = difftime(now, conn->update_time);
 
-    // if (time_difference != 0) {  // Only update if at least one second has passed
-        conn->rx_speed = ((conn->rx_bytes) ) / (time_difference + 1) ;
-        if(conn->rx_speed > 1000){
-            conn->rx_speed = conn->rx_speed / 1000;
+    // Update speeds
+    conn->rx_speed = ((conn->rx_bytes)) / (time_difference + 1);
+    
+    
+    conn->tx_speed = ((conn->tx_bytes)) / (time_difference + 1);
+    
+    
+    conn->rx_packet_speed = conn->rx_packets / (time_difference + 1);
+    conn->tx_packet_speed = conn->tx_packets / (time_difference + 1);
+
+    // If there's activity, update last_active timestamp
+    if (conn->rx_bytes > 0 || conn->tx_bytes > 0 || 
+        conn->rx_packets > 0 || conn->tx_packets > 0) {
+        conn->last_active = now;
+    }
+
+    // Reset counters
+    conn->rx_bytes = 0;
+    conn->tx_bytes = 0;
+    conn->tx_packets = 0;
+    conn->rx_packets = 0;
+    conn->update_time = now;
+}
+
+
+int compare(const void *a, const void *b) {
+    connection_stats_t *conn_a = *((connection_stats_t**)a);
+    connection_stats_t *conn_b = *((connection_stats_t**)b);
+
+
+
+    if(strcmp(order,b) == 0){
+        if(conn_a->tx_speed > conn_a->rx_speed){
+            if (conn_a->tx_speed < conn_b->tx_speed) return 1;
+            if (conn_a->tx_speed > conn_b->tx_speed) return -1;
         }
-        else if(conn->rx_speed > 1000000){
-            conn->rx_speed = conn->rx_speed / 1000000;
+        else{
+            if (conn_a->rx_speed < conn_b->rx_speed) return 1;
+            if (conn_a->rx_speed > conn_b->rx_speed) return -1;
         }
-        conn->tx_speed = ((conn->tx_bytes) ) / (time_difference + 1);
-        if(conn->tx_speed > 1000){
-            conn->tx_speed = conn->tx_speed / 1000;
+    }
+    else{
+        if(conn_a->tx_packet_speed > conn_a->rx_packet_speed){
+            if (conn_a->tx_packet_speed < conn_b->tx_packet_speed) return 1;
+            if (conn_a->tx_packet_speed > conn_b->tx_packet_speed) return -1;
         }
-        else if(conn->tx_speed > 1000000){
-            conn->tx_speed = conn->tx_speed / 1000000;
+        else{
+            if (conn_a->rx_packet_speed < conn_b->rx_packet_speed) return 1;
+            if (conn_a->rx_packet_speed > conn_b->rx_packet_speed) return -1;
         }
-        conn->rx_packet_speed = conn->rx_packets / (time_difference + 1);
-        conn->tx_packet_speed = conn->tx_packets / (time_difference + 1);
-        // if(conn->rx_speed >= 0 && conn->tx_speed >= 0 ){
-        
-        //     printw("SPEED t:%d   r:%d rozdil:%d\n",conn->tx_speed,conn->rx_speed,time_difference);
-        // }
-        // Reset for next calculation period
-        conn->rx_bytes = 0;
-        conn->tx_bytes = 0;
-        conn->tx_packets = 0;
-        conn->rx_packets = 0;
-        conn->update_time = now;
-    // }
+    }
+    return 0;
 }
 
 void print_top_connections() {
@@ -78,19 +148,19 @@ void print_top_connections() {
     clear();
     // printw("Src IP:port        |         Dst IP:port       |      Proto     |     Rx            |       Tx\n");
     // printw("                                                                      b/s    p/s    |       b/s   p/s\n");
-    printw("%-*s %-*s %-*s %-*s %-*s\n",
-           SRC_IP_PORT_WIDTH, "Src IP:port",
-           DST_IP_PORT_WIDTH, "Dst IP:port",
-           PROTO_WIDTH, "Proto",
-           RX_WIDTH, "Rx",
-           TX_WIDTH, "Tx");
-    printw("%*s %*s %*s %*s\n",
-           SRC_IP_PORT_WIDTH + DST_IP_PORT_WIDTH + PROTO_WIDTH, "",
-           RX_WIDTH, "b/s   p/s",
-           TX_WIDTH, "b/s   p/s");
+    printw("%-*s %-*s %-*s %*s %*s %*s %*s\n",
+       SRC_IP_PORT_WIDTH, "Src IP:port",
+       DST_IP_PORT_WIDTH, "Dst IP:port",
+       PROTO_WIDTH, "Proto",
+       SPEED_WIDTH, "Rx b/s",
+       PKT_WIDTH, "p/s",
+       SPEED_WIDTH, "Tx b/s",
+       PKT_WIDTH, "p/s");
 
     // Iterate over the hashtable and collect active connections
-    connection_stats_t *top_connections[10];  // Array to store top 10 connections
+    //connection_stats_t *top_connections[10];  // Array to store top 10 connections
+    connection_stats_t *top_connections[HASH_SIZE * 10];  // Assuming max 10 connections per bucket
+
     int count = 0;
 
     for (int i = 0; i < HASH_SIZE; i++) {
@@ -110,62 +180,108 @@ void print_top_connections() {
 
                     connection_stats_t merged_connection = merge(current,found_connection);
                     insert_merged(&merged_connection,hash_function(&merged_connection.key));
-                    
-                   delete(&sec_connection);
+                    if(strcmp(current->key.src_ip,sec_connection.src_ip) != 0){ // neni localhost 
+
+                        delete(&sec_connection);
+                    }
                 }
             update_speed(current);
             // Sort and store only top 10 connections
+            
             if (count < 10) {
                 top_connections[count++] = current;
             } else {
-                // Implement sorting logic to keep only the top 10 connections
-                for (int j = 0; j < 10; j++) {
-                    // if (/* sorting condition, e.g., current->rx_bytes > top_connections[j]->rx_bytes */) {
-                        top_connections[j] = current;
-                        break;
-                    // }
+
+                int min_idx = 0;
+                uint64_t min_traffic = top_connections[0]->rx_speed + top_connections[0]->tx_speed;
+
+                for (int j = 1; j < 10; j++) {
+                    uint64_t traffic = top_connections[j]->rx_speed + top_connections[j]->tx_speed;
+                    if (traffic < min_traffic) {
+                        min_idx = j;
+                        min_traffic = traffic;
+                    }
                 }
+
+                // Replace if current has more traffic
+                uint64_t current_traffic = current->rx_speed + current->tx_speed;
+                if (current_traffic > min_traffic) {
+                    top_connections[min_idx] = current;
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // // Implement sorting logic to keep only the top 10 connections
+                // for (int j = 0; j < 10; j++) {
+                //     // if (current->tx_bytes > top_connections[j]->tx_bytes) {
+                //         top_connections[j] = current;
+                //         break;
+                //     // }
+                // }
             }
             current = current->next;
         }
     }
 
+    
+    qsort(top_connections, count, sizeof(connection_stats_t*), compare);
+
+
     // Print each of the top connections
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < count ; i++) {
+    // for (int i = 0; i < (count < 10 ? count : 10); i++) {
         connection_stats_t *conn = top_connections[i];
+        
+        time_t now = time(NULL);
+        char src_ip_port[SRC_IP_PORT_WIDTH];
+        char dst_ip_port[DST_IP_PORT_WIDTH];
+        char rx_speed_str[8];
+        char tx_speed_str[8];
+        
+        snprintf(src_ip_port, SRC_IP_PORT_WIDTH, "%s:%d", 
+                conn->key.src_ip, conn->key.src_port);
+        snprintf(dst_ip_port, DST_IP_PORT_WIDTH, "%s:%d", 
+                conn->key.dst_ip, conn->key.dst_port);
+        
+        format_network_speed(conn->rx_speed, rx_speed_str, sizeof(rx_speed_str));
+        format_network_speed(conn->tx_speed, tx_speed_str, sizeof(tx_speed_str));
 
-        if(conn->rx_speed != 0 && conn->tx_speed != 0 ){
-        // if(conn->key.src_port == 443 || conn->key.dst_port == 443){
-        // if(strcmp( conn->key.src_ip,"8.8.8.8") == 0 || strcmp( conn->key.dst_ip,"8.8.8.8") == 0 || conn->key.src_port == 80 || conn->key.dst_port == 80){ 
-        // if(strcmp( conn->key.src_ip,"8.8.8.8") == 0 || strcmp( conn->key.dst_ip,"8.8.8.8") == 0){
-
-            // printw("%s:%d        |         %s:%d       |      %s           %lu    %lu        %lu    %lu\n",
-            //     conn->key.src_ip, conn->key.src_port,
-            //     conn->key.dst_ip, conn->key.dst_port,
-            //     conn->key.protocol,
-            //     conn->rx_speed , conn->rx_packet_speed,
-            //     conn->tx_speed , conn->tx_packet_speed);
+        char rx_pkt_str[8];
+        char tx_pkt_str[8];
+        format_packet_count(conn->rx_packet_speed, rx_pkt_str, sizeof(rx_pkt_str));
+        format_packet_count(conn->tx_packet_speed, tx_pkt_str, sizeof(tx_pkt_str));
+        
+        if ((conn->rx_speed != 0 || conn->tx_speed != 0) || 
+            (difftime(now, conn->last_active) < 2.0)) {
             char src_ip_port[SRC_IP_PORT_WIDTH];
-                char dst_ip_port[DST_IP_PORT_WIDTH];
-
-        snprintf(src_ip_port, SRC_IP_PORT_WIDTH, "%s:%d", conn->key.src_ip, conn->key.src_port);
-        snprintf(dst_ip_port, DST_IP_PORT_WIDTH, "%s:%d", conn->key.dst_ip, conn->key.dst_port);
-
-        printw("%-*s %-*s %-*s %lu  %lu       %lu   %lu\n",
-               SRC_IP_PORT_WIDTH, src_ip_port,
-               DST_IP_PORT_WIDTH, dst_ip_port,
-               PROTO_WIDTH, conn->key.protocol,
-               conn->rx_speed , 
-               conn->rx_packet_speed,
-               conn->tx_speed, 
-               conn->tx_packet_speed);
+            char dst_ip_port[DST_IP_PORT_WIDTH];
+            snprintf(src_ip_port, SRC_IP_PORT_WIDTH, "%s:%d", conn->key.src_ip, conn->key.src_port);
+            snprintf(dst_ip_port, DST_IP_PORT_WIDTH, "%s:%d", conn->key.dst_ip, conn->key.dst_port);
+            printw("%-*s %-*s %-*s %*s %*s %*s %*s\n",
+                SRC_IP_PORT_WIDTH, src_ip_port,
+                DST_IP_PORT_WIDTH, dst_ip_port,
+                PROTO_WIDTH, conn->key.protocol,
+                SPEED_WIDTH, rx_speed_str,
+                PKT_WIDTH, rx_pkt_str,
+                SPEED_WIDTH, tx_speed_str,
+                PKT_WIDTH, tx_pkt_str);
         }
-        // }
     }
     // refresh();
 }
 
 void* display_loop(void *args) {
+    
     while (1) {
         print_top_connections();
         refresh();
@@ -199,6 +315,7 @@ connection_stats_t merge(connection_stats_t *connection1,connection_stats_t *con
     merged_connection.rx_packets = connection2->tx_packets;  // Odpovídá přijatým z druhé strany
     merged_connection.rx_bytes = connection2->tx_bytes;      // Odpovídá přijatým bajtům z druhé strany
     merged_connection.update_time = connection1->update_time;
+    merged_connection.last_active = connection1->last_active;
 
     
     return merged_connection;
@@ -212,6 +329,8 @@ pcap_t* create_pcap_handle(char* interface) // TODO edit
     bpf_u_int32 source_ip;
     char error_buffer[PCAP_ERRBUF_SIZE];
     char filter[] = "";
+    //char filter[] = "icmp or icmp6";
+    
 
 
     // Get network interface source IP address and network_mask.
@@ -221,6 +340,7 @@ pcap_t* create_pcap_handle(char* interface) // TODO edit
     }
 
     // Open the interface for live capture.
+    // created_handle = pcap_open_live(interface, BUFSIZ, 1, 0, error_buffer);
     created_handle = pcap_open_live(interface, BUFSIZ, 1, 1000, error_buffer);
     if (created_handle == NULL) {
         fprintf(stderr, "pcap_open_live(): %s\n", error_buffer);
@@ -274,67 +394,108 @@ void get_link_header_len(pcap_t* handle) // TODO edit
     }
 }
 
-void packet_handler(u_char *user,const struct pcap_pkthdr *packethdr, const u_char *packetptr)
-{
+
+void packet_handler(u_char *user, const struct pcap_pkthdr *packethdr, const u_char *packetptr) {
+        // printf("Packet received, length: %d\n", packethdr->len);
+
     struct ip* ip_header;
+    struct ip6_hdr* ip6_header;
     struct icmp* icmp_header;
+    struct icmp6_hdr* icmp6_header;
     struct tcphdr* tcp_header;
     struct udphdr* udp_header;
-    char ip_header_info[256];
-    char source_ip[256];
-    char destination_ip[256];
-
     connection_key_t key;
- 
+    char source_ip[INET6_ADDRSTRLEN];
+    char destination_ip[INET6_ADDRSTRLEN];
 
     // Skip the datalink layer header and get the IP header fields.
     packetptr += header_length;
-    ip_header = (struct ip*)packetptr;
 
-    strcpy(source_ip, inet_ntoa(ip_header->ip_src));
-    strcpy(destination_ip, inet_ntoa(ip_header->ip_dst));
-    // sprintf(ip_header_info, "ID:%d TOS:0x%x, TTL:%d IpLen:%d DgLen:%d",
-    //         ntohs(ip_header->ip_id), ip_header->ip_tos, ip_header->ip_ttl,
-    //         4*ip_header->ip_hl, ntohs(ip_header->ip_len));
-    strcpy(key.src_ip, source_ip);
-    strcpy(key.dst_ip, destination_ip);
+    // Determine if the packet is IPv4 or IPv6
+    if (((struct ip*)packetptr)->ip_v == 4) {
+        // IPv4 packet
+        ip_header = (struct ip*)packetptr;
+        strcpy(source_ip, inet_ntoa(ip_header->ip_src));
+        strcpy(destination_ip, inet_ntoa(ip_header->ip_dst));
+        strcpy(key.src_ip, source_ip);
+        strcpy(key.dst_ip, destination_ip);
 
-    // Advance to the transport layer header then parse and display
-    // the fields based on the type of hearder: tcp, udp or icmp.
-    packetptr += 4 * ip_header->ip_hl;
-    switch (ip_header->ip_p)
-    {
-    case IPPROTO_TCP:
-        tcp_header = (struct tcphdr*)packetptr;
-        key.src_port = ntohs(tcp_header->th_sport);
-        key.dst_port = ntohs(tcp_header->th_dport);
-        strcpy(key.protocol, "tcp");
-        // printf("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
-        insert_or_update(&key, packethdr->len);
-        break;
- 
-    case IPPROTO_UDP:
-        udp_header = (struct udphdr *)packetptr;
-        key.src_port = ntohs(udp_header->uh_sport);
-        key.dst_port = ntohs(udp_header->uh_dport);
-        strcpy(key.protocol, "udp");
-        insert_or_update(&key, packethdr->len);
-        break;
- 
-    case IPPROTO_ICMP:
-        icmp_header = (struct icmp*)packetptr;
-        key.src_port = 0;
-        key.dst_port = 0;
-        strcpy(key.protocol, "icmp");
-        // printf("ICMP %s -> %s\n", source_ip, destination_ip);
-        // printf("%s\n", ip_header_info);
-        // printf("Type:%d Code:%d ID:%d Seq:%d\n", icmp_header->icmp_type, icmp_header->icmp_code,
-        //        ntohs(icmp_header->icmp_hun.ih_idseq.icd_id), ntohs(icmp_header->icmp_hun.ih_idseq.icd_seq));
-        // printf("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n");
-        insert_or_update(&key, packethdr->len);
-        break;
+        // Advance to the transport layer header and parse the fields based on the protocol.
+        packetptr += 4 * ip_header->ip_hl;
+        switch (ip_header->ip_p) {
+            case IPPROTO_TCP:
+                tcp_header = (struct tcphdr*)packetptr;
+                key.src_port = ntohs(tcp_header->th_sport);
+                key.dst_port = ntohs(tcp_header->th_dport);
+                strcpy(key.protocol, "tcp");
+                break;
+
+            case IPPROTO_UDP:
+                udp_header = (struct udphdr*)packetptr;
+                key.src_port = ntohs(udp_header->uh_sport);
+                key.dst_port = ntohs(udp_header->uh_dport);
+                strcpy(key.protocol, "udp");
+                break;
+
+            case IPPROTO_ICMP:
+                icmp_header = (struct icmp*)packetptr;
+                key.src_port = 0;
+                key.dst_port = 0;
+                strcpy(key.protocol, "icmp");
+                break;
+
+            default:
+                // Unsupported protocol, return without updating the hash table.
+                return;
+        }
+    } else if (((struct ip6_hdr*)packetptr)->ip6_vfc >> 4 == 6) {
+        // IPv6 packet
+        ip6_header = (struct ip6_hdr*)packetptr;
+        inet_ntop(AF_INET6, &ip6_header->ip6_src, source_ip, INET6_ADDRSTRLEN);
+        inet_ntop(AF_INET6, &ip6_header->ip6_dst, destination_ip, INET6_ADDRSTRLEN);
+        strcpy(key.src_ip, source_ip);
+        strcpy(key.dst_ip, destination_ip);
+
+        // Advance to the transport layer header and parse the fields based on the protocol.
+        packetptr += sizeof(struct ip6_hdr);
+        switch (ip6_header->ip6_nxt) {
+            case IPPROTO_TCP:
+                tcp_header = (struct tcphdr*)packetptr;
+                key.src_port = ntohs(tcp_header->th_sport);
+                key.dst_port = ntohs(tcp_header->th_dport);
+                strcpy(key.protocol, "tcp");
+                break;
+
+            case IPPROTO_UDP:
+                udp_header = (struct udphdr*)packetptr;
+                key.src_port = ntohs(udp_header->uh_sport);
+                key.dst_port = ntohs(udp_header->uh_dport);
+                strcpy(key.protocol, "udp");
+                break;
+
+            case IPPROTO_ICMPV6:
+                icmp6_header = (struct icmp6_hdr*)packetptr;
+                key.src_port = 0;
+                key.dst_port = 0;
+                strcpy(key.protocol, "icmpv6");
+                // printw("ICMPv6 packet detected\n");
+                refresh();  // Ensure the ncurses window is refreshed
+                break;
+
+            default:
+                // Unsupported protocol, return without updating the hash table.
+                return;
+        }
+    } else {
+        // Unsupported IP version, return without updating the hash table.
+        return;
     }
+
+    // Update the hash table with the packet length.
+    insert_or_update(&key, packethdr->len);
 }
+
+// Other code...
 
 
 void stop_capture(int signo) //TODO edit
@@ -378,24 +539,38 @@ void stop_capture(int signo) //TODO edit
 }
 
 int main(int argc, char* argv[]){
-    char *interface = malloc(sizeof(char*)); // zmenit 
+    interface = malloc(sizeof(char*)); // zmenit
+    order = malloc(sizeof(char*)); // zmenit 
+    //stpcpy(order,"b");
 
     // Initialize ncurses
     initscr();
     cbreak();
     noecho();
     scrollok(stdscr, TRUE);
+    
 
-
-    if (argc < 3 || argc > 3) {
+    if (argc < 3 || argc > 5) {
         free(interface) ;
-        printf("Usage: %s -i <interface>\n", argv[0]);
+        printf("Usage: %s -i <interface> [-s b/p]\n", argv[0]);
         exit(0);
     }
     if(strcmp(argv[1],"-i") == 0 ){
         strcpy(interface,argv[2]);
-    }else{
-        printf("Usage: %s -i <interface>\n", argv[0]);
+    }
+    else if(argv[3] != NULL){
+        if(strcmp(argv[3],"-s") == 0 ){
+            strcpy(order,argv[4]);
+            if(strcmp(order,"b") == 0 ){
+                strcpy(order,"b");
+            }
+            if(strcmp(order,"p") == 0 ){
+                strcpy(order,"p");
+            }
+        }
+    }
+    else{
+        printf("Usage: %s -i <interface> [-s b/p]\n", argv[0]);
         free(interface);
         
         exit(0);
