@@ -27,15 +27,98 @@
     {\Large 2024 \hfill Václav Zapletal (xzaple40)}
 \end{titlepage}
 
-% \section*{Úvod}
+\tableofcontents
+\newpage
 
-\section{Obsah}
+\section{Úvod}
+Tento dokument popisuje implementaci programu \texttt{isa-top}, který slouží k monitorování síťových toků v reálném čase. Program zachycuje síťový provoz a zobrazuje statistiky přenosu dat pro jednotlivá spojení, podobně jako utilita \texttt{top}.
 
-\section{Přehled nastudovaných informací z literatury}
+\section{Návrh aplikace}
+\subsection{Požadavky}
+Program musí:
+\begin{itemize}
+    \item Zachytávat síťový provoz pomocí knihovny libpcap
+    \item Zobrazovat statistiky v reálném čase
+    \item Podporovat IPv4 i IPv6 adresy
+    \item Sledovat TCP, UDP a ICMP protokoly
+    \item Umožňovat řazení podle přenesených bajtů nebo paketů
+\end{itemize}
 
-\section{Popis zajímavějších pasáží implementace}
+\subsection{Architektura}
+Program je rozdělen do několika hlavních komponent:
+\begin{itemize}
+    \item Zachytávání paketů (libpcap)
+    \item Správa spojení (hash tabulka)
+    \item Výpočet statistik
+    \item Uživatelské rozhraní (ncurses)
+\end{itemize}
 
+\section{Implementace}
+\subsection{Datové struktury}
+Program používá následující klíčové datové struktury:
+\begin{itemize}
+    \item \texttt{connection\_key\_t} - identifikace spojení (zdrojová/cílová IP, porty, protokol)
+    \item \texttt{connection\_stats\_t} - statistiky spojení (počty bajtů, paketů, rychlosti)
+    \item Hash tabulka pro ukládání aktivních spojení
+\end{itemize}
 
-\section{Použití vytvořených programů a literatura.}
+\subsection{Zpracování paketů}
+Implementace zahrnuje:
+\begin{itemize}
+    \item Parsování IP hlaviček (IPv4/IPv6)
+    \item Identifikace protokolů (TCP/UDP/ICMP)
+    \item Výpočet přenosových rychlostí
+    \item Správu aktivních spojení
+\end{itemize}
+
+\subsection{Zajímavé části implementace}
+\begin{itemize}
+    \item Sloučení obousměrného provozu pro jedno spojení
+    \item Formátování rychlostí (K/M/G jednotky)
+    \item Řešení localhost spojení
+    \item Aktualizace statistik v reálném čase
+\end{itemize}
+
+\section{Použití programu}
+\subsection{Kompilace}
+\begin{verbatim}
+make
+\end{verbatim}
+
+\subsection{Spuštění}
+\begin{verbatim}
+./isa-top -i <rozhraní> [-s b/p]
+\end{verbatim}
+
+Parametry:
+\begin{itemize}
+    \item \texttt{-i} - síťové rozhraní
+    \item \texttt{-s b} - řazení podle bajtů/s (výchozí)
+    \item \texttt{-s p} - řazení podle paketů/s
+\end{itemize}
+
+\section{Testování}
+\subsection{Testovací prostředí}
+\begin{itemize}
+    \item Různá síťová rozhraní
+    \item IPv4 a IPv6 provoz
+    \item TCP, UDP a ICMP protokoly
+    \item Vysoké datové toky
+\end{itemize}
+
+\subsection{Výsledky testů}
+\begin{itemize}
+    \item Správné zobrazení IPv4/IPv6 adres
+    \item Přesnost měření přenosových rychlostí
+    \item Stabilita při dlouhodobém běhu
+    \item Správné řazení spojení
+\end{itemize}
+
+\section{Literatura}
+\begin{enumerate}
+    \item STEVENS, W. Richard. TCP/IP Illustrated, Volume 1: The Protocols
+    \item Dokumentace knihovny libpcap
+    \item Dokumentace knihovny ncurses
+\end{enumerate}
 
 \end{document}
