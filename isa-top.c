@@ -10,46 +10,43 @@
 #define PROTO_WIDTH 10
 #define RX_WIDTH 15
 #define TX_WIDTH 15
-#define SPEED_WIDTH 8   // Add new constant for speed values
-#define PKT_WIDTH 6     // Add new constant for packet counts
-
-
-/*
-Src IP:port                 Dst IP:port             Proto          Rx               Tx
-                                                                   b/s    p/s       b/s   p/s
-147.229.13.210:443          147.229.14.76:61027     tcp            130.8M 62.3k     10.2M 1.8K
-
-*/
-
-/*
-Todo
-- Sortovat podle paketu/bitu todo kontrola
-- Merge funkce spojuje spatne!!!!!!!!! 2 ruzne pingy na google a 8.8.8.8 a zacne si to zrat navzajem
-- pri local host atd proste stejnych IP se to pricita spatne todo
-- todo mizi icmp kdyz je hodne connections
-
-*/
+#define SPEED_WIDTH 8  
+#define PKT_WIDTH 6    
 
 #define KILO 1000ULL
 #define MEGA (KILO * 1000ULL)
 #define GIGA (MEGA * 1000ULL)
+/*
+Todo
+- Sortovat podle paketu/bitu todo kontrola
+- Merge funkce spojuje spatne!!!!!!!!! 2 ruzne pingy na google a 8.8.8.8 a zacne si to zrat navzajem
+- TODO - 14 zmizet
+- todo opravit aby to nebylo moc stejne jak sniffer nekoho jineho (Similar code found with 1 license type - View matches)
+
+*/
+pcap_t* pcap_handle;
+int header_length;
+int packets;
+
+connection_stats_t *hash_table[HASH_SIZE];
+char order;
+
 
 void format_packet_count(uint64_t packets, char *buffer, size_t buffer_size) {
     if (packets >= KILO) {
         double formatted = packets / (double)KILO;
         if (formatted >= 100) {
-            snprintf(buffer, buffer_size, "%3.0fK", formatted);
+            snprintf(buffer, buffer_size, "%.1fK", formatted);
         } else if (formatted >= 10) {
-            snprintf(buffer, buffer_size, "%4.1fK", formatted);
+            snprintf(buffer, buffer_size, "%.1fK", formatted);
         } else {
-            snprintf(buffer, buffer_size, "%4.1fK", formatted);
+            snprintf(buffer, buffer_size, "%.1fK", formatted);
         }
     } else {
-        snprintf(buffer, buffer_size, "%4.0f", (double)packets);
+        snprintf(buffer, buffer_size, "%.0f", (double)packets);
     }
 }
 
-// Add this helper function
 void format_network_speed(uint64_t speed, char *buffer, size_t buffer_size) {
     double formatted_speed;
     const char *unit;
@@ -68,22 +65,17 @@ void format_network_speed(uint64_t speed, char *buffer, size_t buffer_size) {
         unit = " ";
     }
 
-    // Format with appropriate precision
-    if (formatted_speed >= 100) {
-        snprintf(buffer, buffer_size, "%3.0f%s", formatted_speed, unit);
-    } else if (formatted_speed >= 10) {
-        snprintf(buffer, buffer_size, "%4.1f%s", formatted_speed, unit);
-    } else {
-        snprintf(buffer, buffer_size, "%4.2f%s", formatted_speed, unit);
+    if(formatted_speed == 0){
+        snprintf(buffer, buffer_size, "0");
+    }
+    else if(speed < KILO){
+        snprintf(buffer, buffer_size, "%.0f", formatted_speed);
+    } 
+    else {
+        snprintf(buffer, buffer_size, "%.1f%s", formatted_speed, unit);
     }
 }
 
-pcap_t* pcap_handle;
-int header_length;
-int packets;
-char* interface = NULL;  // TODO vyresit cleaning a free
-connection_stats_t *hash_table[HASH_SIZE];
-char* order = NULL;
 
 void update_speed(connection_stats_t *conn) {
     time_t now = time(NULL);
@@ -120,7 +112,7 @@ int compare(const void *a, const void *b) {
 
 
 
-    if(strcmp(order,b) == 0){
+    if(order == 'b'){
         if(conn_a->tx_speed > conn_a->rx_speed){
             if (conn_a->tx_speed < conn_b->tx_speed) return 1;
             if (conn_a->tx_speed > conn_b->tx_speed) return -1;
@@ -143,11 +135,27 @@ int compare(const void *a, const void *b) {
     return 0;
 }
 
+void format_ip_port(char* protocol,const char *ip, uint16_t port, char *buffer, size_t buffer_size) {
+    if (strchr(ip, ':') != NULL) { // IPv6 address
+        if(strcmp(protocol,"icmpv6") == 0){
+            snprintf(buffer, buffer_size, "[%s]", ip);
+        }else{
+            snprintf(buffer, buffer_size, "[%s]:%d", ip, port);
+        }
+    } 
+    else { 
+        if(strcmp(protocol,"icmp") == 0){
+            snprintf(buffer, buffer_size, "%s", ip);
+        }else{
+            snprintf(buffer, buffer_size, "%s:%d", ip, port);
+            }
+    }
+}
+
 void print_top_connections() {
-    // Clear the screen and print header
+    
     clear();
-    // printw("Src IP:port        |         Dst IP:port       |      Proto     |     Rx            |       Tx\n");
-    // printw("                                                                      b/s    p/s    |       b/s   p/s\n");
+    
     printw("%-*s %-*s %-*s %*s %*s %*s %*s\n",
        SRC_IP_PORT_WIDTH, "Src IP:port",
        DST_IP_PORT_WIDTH, "Dst IP:port",
@@ -166,7 +174,7 @@ void print_top_connections() {
     for (int i = 0; i < HASH_SIZE; i++) {
         connection_stats_t *current = hash_table[i];
         while (current != NULL) {
-            
+            connection_stats_t merged_connection;
 
             connection_key_t sec_connection;
             strcpy(sec_connection.src_ip,current->key.dst_ip);
@@ -178,12 +186,14 @@ void print_top_connections() {
             connection_stats_t *found_connection = find(&sec_connection);
                 if(found_connection != NULL){
 
-                    connection_stats_t merged_connection = merge(current,found_connection);
-                    insert_merged(&merged_connection,hash_function(&merged_connection.key));
+                    
                     if(strcmp(current->key.src_ip,sec_connection.src_ip) != 0){ // neni localhost 
-
+                        merged_connection = merge(current,found_connection,false);
                         delete(&sec_connection);
+                    }else{
+                        merged_connection = merge(current,current,true);
                     }
+                    insert_merged(&merged_connection,hash_function(&merged_connection.key));
                 }
             update_speed(current);
             // Sort and store only top 10 connections
@@ -239,7 +249,6 @@ void print_top_connections() {
 
     // Print each of the top connections
     for (int i = 0; i < count ; i++) {
-    // for (int i = 0; i < (count < 10 ? count : 10); i++) {
         connection_stats_t *conn = top_connections[i];
         
         time_t now = time(NULL);
@@ -247,6 +256,8 @@ void print_top_connections() {
         char dst_ip_port[DST_IP_PORT_WIDTH];
         char rx_speed_str[8];
         char tx_speed_str[8];
+
+
         
         snprintf(src_ip_port, SRC_IP_PORT_WIDTH, "%s:%d", 
                 conn->key.src_ip, conn->key.src_port);
@@ -260,24 +271,35 @@ void print_top_connections() {
         char tx_pkt_str[8];
         format_packet_count(conn->rx_packet_speed, rx_pkt_str, sizeof(rx_pkt_str));
         format_packet_count(conn->tx_packet_speed, tx_pkt_str, sizeof(tx_pkt_str));
+
+        format_ip_port(conn->key.protocol,conn->key.src_ip, conn->key.src_port, src_ip_port, SRC_IP_PORT_WIDTH);
+        format_ip_port(conn->key.protocol,conn->key.dst_ip, conn->key.dst_port, dst_ip_port, DST_IP_PORT_WIDTH);
         
         if ((conn->rx_speed != 0 || conn->tx_speed != 0) || 
             (difftime(now, conn->last_active) < 2.0)) {
-            char src_ip_port[SRC_IP_PORT_WIDTH];
-            char dst_ip_port[DST_IP_PORT_WIDTH];
-            snprintf(src_ip_port, SRC_IP_PORT_WIDTH, "%s:%d", conn->key.src_ip, conn->key.src_port);
-            snprintf(dst_ip_port, DST_IP_PORT_WIDTH, "%s:%d", conn->key.dst_ip, conn->key.dst_port);
-            printw("%-*s %-*s %-*s %*s %*s %*s %*s\n",
-                SRC_IP_PORT_WIDTH, src_ip_port,
-                DST_IP_PORT_WIDTH, dst_ip_port,
-                PROTO_WIDTH, conn->key.protocol,
-                SPEED_WIDTH, rx_speed_str,
-                PKT_WIDTH, rx_pkt_str,
-                SPEED_WIDTH, tx_speed_str,
-                PKT_WIDTH, tx_pkt_str);
+        
+            if(strcmp(conn->key.protocol,"icmp") == 0 ){
+                printw("%-*s %-*s %-*s %*s %*s %*s %*s\n",
+                    SRC_IP_PORT_WIDTH, conn->key.src_ip,
+                    DST_IP_PORT_WIDTH, conn->key.dst_ip,
+                    PROTO_WIDTH, conn->key.protocol,
+                    SPEED_WIDTH, rx_speed_str,
+                    PKT_WIDTH, rx_pkt_str,
+                    SPEED_WIDTH, tx_speed_str,
+                    PKT_WIDTH, tx_pkt_str);
+            }else{
+                printw("%-*s %-*s %-*s %*s %*s %*s %*s\n",
+                    SRC_IP_PORT_WIDTH, src_ip_port,
+                    DST_IP_PORT_WIDTH, dst_ip_port,
+                    PROTO_WIDTH, conn->key.protocol,
+                    SPEED_WIDTH, rx_speed_str,
+                    PKT_WIDTH, rx_pkt_str,
+                    SPEED_WIDTH, tx_speed_str,
+                    PKT_WIDTH, tx_pkt_str);
+            }
         }
     }
-    // refresh();
+    
 }
 
 void* display_loop(void *args) {
@@ -291,12 +313,8 @@ void* display_loop(void *args) {
 }
 
 
-connection_stats_t merge(connection_stats_t *connection1,connection_stats_t *connection2){
-    /*
-    Src IP: 192.168.0.119, Src Port: 0, Dst IP: 8.8.8.8, Dst Port: 0, Protocol: icmp, Rx Bytes: 980, Rx Packets: 10, Tx Bytes: 0, Tx Packets: 0
-    Src IP: 8.8.8.8, Src Port: 0, Dst IP: 192.168.0.119, Dst Port: 0, Protocol: icmp, Rx Bytes: 1078, Rx Packets: 11, Tx Bytes: 0, Tx Packets: 0
-    Src IP: 192.168.0.119, Src Port: 0, Dst IP: 8.8.8.8, Dst Port: 0, Protocol: icmp, Rx Bytes: 980, Rx Packets: 10, Tx Bytes: 1078, Tx Packets: 11
-    */
+connection_stats_t merge(connection_stats_t *connection1,connection_stats_t *connection2, bool same_addrs){
+    
     
     connection_stats_t merged_connection;
 
@@ -307,13 +325,22 @@ connection_stats_t merge(connection_stats_t *connection1,connection_stats_t *con
     merged_connection.key.dst_port = connection1->key.dst_port;
     strcpy(merged_connection.key.protocol, connection1->key.protocol);
 
-    // Rx (přijaté) statistiky pro první spojení
-    merged_connection.tx_packets = connection1->tx_packets;
-    merged_connection.tx_bytes = connection1->tx_bytes;
+    
+    
 
-    // Tx (odeslané) statistiky pro druhé spojení (druhá strana komunikace)
-    merged_connection.rx_packets = connection2->tx_packets;  // Odpovídá přijatým z druhé strany
-    merged_connection.rx_bytes = connection2->tx_bytes;      // Odpovídá přijatým bajtům z druhé strany
+    
+    if(same_addrs){
+        merged_connection.tx_packets = connection1->tx_packets / 2;
+        merged_connection.tx_bytes = connection1->tx_bytes / 2;
+        merged_connection.rx_packets = connection1->tx_packets / 2;  
+        merged_connection.rx_bytes = connection1->tx_bytes / 2;      
+    }else{
+        merged_connection.tx_packets = connection1->tx_packets;
+        merged_connection.tx_bytes = connection1->tx_bytes;
+        merged_connection.rx_packets = connection2->tx_packets;  
+        merged_connection.rx_bytes = connection2->tx_bytes;      
+    }
+
     merged_connection.update_time = connection1->update_time;
     merged_connection.last_active = connection1->last_active;
 
@@ -396,7 +423,6 @@ void get_link_header_len(pcap_t* handle) // TODO edit
 
 
 void packet_handler(u_char *user, const struct pcap_pkthdr *packethdr, const u_char *packetptr) {
-        // printf("Packet received, length: %d\n", packethdr->len);
 
     struct ip* ip_header;
     struct ip6_hdr* ip6_header;
@@ -478,8 +504,8 @@ void packet_handler(u_char *user, const struct pcap_pkthdr *packethdr, const u_c
                 key.src_port = 0;
                 key.dst_port = 0;
                 strcpy(key.protocol, "icmpv6");
-                // printw("ICMPv6 packet detected\n");
-                refresh();  // Ensure the ncurses window is refreshed
+                
+                
                 break;
 
             default:
@@ -495,23 +521,20 @@ void packet_handler(u_char *user, const struct pcap_pkthdr *packethdr, const u_c
     insert_or_update(&key, packethdr->len);
 }
 
-// Other code...
+
 
 
 void stop_capture(int signo) //TODO edit
 {
     
-    struct pcap_stat stats;
- 
-    if (pcap_stats(pcap_handle, &stats) >= 0) {
-        printf("\n%d packets captured\n", packets);
-        printf("%d packets received by filter\n", stats.ps_recv); 
-        printf("%d packets dropped\n\n", stats.ps_drop);
-    }
+    
+    endwin();
+    
 
     if (pcap_handle != NULL) {
         pcap_close(pcap_handle);
         pcap_handle = NULL;
+        
     }
 
     
@@ -526,9 +549,10 @@ void stop_capture(int signo) //TODO edit
         hash_table[i] = NULL;
     }
     
-    endwin();
-    free(interface);
-    print_all_items();
+    
+    // free(interface);
+    // free(order);
+    //print_all_items();
 
     
 
@@ -539,42 +563,42 @@ void stop_capture(int signo) //TODO edit
 }
 
 int main(int argc, char* argv[]){
-    interface = malloc(sizeof(char*)); // zmenit
-    order = malloc(sizeof(char*)); // zmenit 
-    //stpcpy(order,"b");
+    char* interface = NULL;  
+    // order = malloc(2);  
+    // stpcpy(order,"b");
+    order = 'b';
 
+    
+
+    if (argc != 3 && argc != 5) {
+        //free(interface) ;
+        printf("Usage: %s -i <interface> [-s b/p]\n", argv[0]);
+        
+        exit(0);
+    }
+    if(strcmp(argv[1],"-i") != 0 ){
+        printf("Usage: %s -i <interface> [-s b/p]\n", argv[0]);
+        exit(0);
+    }
+    if(argc == 5 && strcmp(argv[3], "-s") == 0 && argv[4] != NULL){    
+        order = *argv[4];
+        if(order != 'b' && order !='p'){
+        
+            printf("Usage: %s -i <interface> [-s b/p]\n", argv[0]);
+            
+            
+            exit(0);
+        }
+            
+    }
+    
+    interface = argv[2];
+    
     // Initialize ncurses
     initscr();
     cbreak();
     noecho();
     scrollok(stdscr, TRUE);
-    
-
-    if (argc < 3 || argc > 5) {
-        free(interface) ;
-        printf("Usage: %s -i <interface> [-s b/p]\n", argv[0]);
-        exit(0);
-    }
-    if(strcmp(argv[1],"-i") == 0 ){
-        strcpy(interface,argv[2]);
-    }
-    else if(argv[3] != NULL){
-        if(strcmp(argv[3],"-s") == 0 ){
-            strcpy(order,argv[4]);
-            if(strcmp(order,"b") == 0 ){
-                strcpy(order,"b");
-            }
-            if(strcmp(order,"p") == 0 ){
-                strcpy(order,"p");
-            }
-        }
-    }
-    else{
-        printf("Usage: %s -i <interface> [-s b/p]\n", argv[0]);
-        free(interface);
-        
-        exit(0);
-    }
     
     signal(SIGINT, stop_capture);
     signal(SIGTERM, stop_capture);
@@ -587,14 +611,16 @@ int main(int argc, char* argv[]){
     pcap_handle = create_pcap_handle(interface);
     if (pcap_handle == NULL) {
         fprintf(stderr, "create_pcap_handle(): invalid handle\n");
-        return -1;
+        endwin();
+        exit(0);
     }
 
     // Get the type of link layer.
     get_link_header_len(pcap_handle);
     if (header_length == 0) {
         fprintf(stderr, "get_link_header_len(): invalid header length\n");
-        return -1;
+        endwin();
+        exit(0);
     }
     
      // Start the ncurses display loop in a separate thread
@@ -604,15 +630,9 @@ int main(int argc, char* argv[]){
     // Start the packet capture with a set count or continually if the count is 0.
     if (pcap_loop(pcap_handle, -1, packet_handler, (u_char*)NULL) == PCAP_ERROR) {
         fprintf(stderr, "pcap_loop failed: %s\n", pcap_geterr(pcap_handle));
-        return -1;
+        endwin();
+        exit(0);
     }
-    
-    
-    
-    
-    
-
-    
     
     return 0;
 }
