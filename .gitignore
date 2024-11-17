@@ -16,3 +16,5 @@ manual.fls
 manual.log
 manual.out
 manual.synctex.gz
+.prettierrc
+.clang-format
