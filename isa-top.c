@@ -1,7 +1,5 @@
-#include "isa-top.h"
 #include "hashtable.h"
-
-#define HASH_SIZE 1024
+#include "isa-top.h"
 
 #define SRC_IP_PORT_WIDTH 45
 #define DST_IP_PORT_WIDTH 55
@@ -16,18 +14,13 @@
 #define GIGA 1000000000
 /*
 Todo
-- Sortovat podle paketu/bitu todo kontrola
-- Merge funkce spojuje spatne!!!!!!!!! 2 ruzne pingy na google a 8.8.8.8 a zacne si to zrat navzajem
-- TODO - 14 zmizet
-- todo opravit aby to nebylo moc stejne jak sniffer nekoho jineho (Similar code found with 1 license
-type - View matches
-
+- todo opravit aby to nebylo moc stejne jak sniffer nekoho jineho (Similar code found with 1 license type - View matches
 */
 pcap_t *pcap_handle;
 int header_length;
 int packets;
 
-connection_stats_t *hash_table[HASH_SIZE];
+
 char order;
 
 void format_p_count(uint64_t packets, char *buffer, size_t buffer_size) {
@@ -35,7 +28,7 @@ void format_p_count(uint64_t packets, char *buffer, size_t buffer_size) {
         double formatted = packets / (double)KILO;
         snprintf(buffer, buffer_size, "%.1fK", formatted);
     } else {
-        snprintf(buffer, buffer_size, "%llu", packets);
+        snprintf(buffer, buffer_size, "%lu", packets);
     }
 }
 
@@ -70,28 +63,27 @@ void update_speed(connection_stats_t *conn) {
     time_t now = time(NULL);
     double time_difference = difftime(now, conn->update_time);
 
-    // Update speeds
     conn->rx_speed = ((conn->rx_bytes)) / (time_difference + 1);
     conn->tx_speed = ((conn->tx_bytes)) / (time_difference + 1);
-
-    // TODO bity za sekundu
-    //  conn->rx_speed = ((conn->rx_bytes * 8)) / (time_difference + 1);
-    //  conn->tx_speed = ((conn->tx_bytes * 8)) / (time_difference + 1);
-
     conn->rx_packet_speed = conn->rx_packets / (time_difference + 1);
     conn->tx_packet_speed = conn->tx_packets / (time_difference + 1);
 
-    // If there's activity, update last_active timestamp
-    if (conn->rx_bytes > 0 || conn->tx_bytes > 0 || conn->rx_packets > 0 || conn->tx_packets > 0) {
-        conn->last_active = now;
+    if ( conn->rx_bytes > 0 || conn->tx_bytes > 0 || conn->rx_packets > 0 || conn->tx_packets > 0) {
+        
+        conn->rx_bytes = 0;
+        conn->tx_bytes = 0;
+        conn->tx_packets = 0;
+        conn->rx_packets = 0;
+        conn->update_time = now;
+        
+    } else {
+        if (difftime(now, conn->update_time) > 1.0) {
+            
+            delete (&conn->key);
+            return;
+        }
     }
 
-    // Reset counters
-    conn->rx_bytes = 0;
-    conn->tx_bytes = 0;
-    conn->tx_packets = 0;
-    conn->rx_packets = 0;
-    conn->update_time = now;
 }
 
 int compare(const void *a, const void *b) {
@@ -128,7 +120,7 @@ int compare(const void *a, const void *b) {
 
 void format_ip_port(char *protocol, const char *ip, uint16_t port, char *buffer,
                     size_t buffer_size) {
-    if (strchr(ip, ':') != NULL) { // IPv6 address
+    if (strchr(ip, ':') != NULL) { 
         if (strcmp(protocol, "icmpv6") == 0) {
             snprintf(buffer, buffer_size, "[%s]", ip);
         } else {
@@ -151,74 +143,44 @@ void print_top_connections() {
            "Dst IP:port", PROTO_WIDTH, "Proto", SPEED_WIDTH, "Rx b/s", PKT_WIDTH, "p/s",
            SPEED_WIDTH, "Tx b/s", PKT_WIDTH, "p/s");
 
-    // Iterate over the hashtable and collect active connections
-    // connection_stats_t *top_connections[10];  // Array to store top 10 connections
-    connection_stats_t *top_connections[HASH_SIZE * 10]; // Assuming max 10 connections per bucket
+    connection_stats_t *top_connections[HASH_SIZE * 10]; 
 
     int count = 0;
 
     for (int i = 0; i < HASH_SIZE; i++) {
         connection_stats_t *current = hash_table[i];
+        
         while (current != NULL) {
-            connection_stats_t merged_connection;
 
-            connection_key_t sec_connection;
-            strcpy(sec_connection.src_ip, current->key.dst_ip);
-            sec_connection.src_port = current->key.dst_port;
-            strcpy(sec_connection.dst_ip, current->key.src_ip);
-            sec_connection.dst_port = current->key.src_port;
-            strcpy(sec_connection.protocol, current->key.protocol);
-
-            connection_stats_t *found_connection = find(&sec_connection);
-            if (found_connection != NULL) {
-
-                if (strcmp(current->key.src_ip, sec_connection.src_ip) != 0) { // neni localhost
-                    merged_connection = merge(current, found_connection, false);
-                    delete (&sec_connection);
-                } else {
-                    merged_connection = merge(current, current, true);
-                }
-                insert_merged(&merged_connection, hash_function(&merged_connection.key));
-            }
             update_speed(current);
-            // Sort and store only top 10 connections
 
             if (count < 10) {
                 top_connections[count++] = current;
             } else {
 
-                // int min_idx = 0;
-                // uint64_t min_traffic = top_connections[0]->rx_speed +
-                // top_connections[0]->tx_speed;
+                int min_idx = 0;
+                uint64_t min_traffic = top_connections[0]->rx_speed + top_connections[0]->tx_speed;
 
-                // for (int j = 1; j < 10; j++) {
-                //     uint64_t traffic = top_connections[j]->rx_speed +
-                //     top_connections[j]->tx_speed; if (traffic < min_traffic) {
-                //         min_idx = j;
-                //         min_traffic = traffic;
-                //     }
-                // }
+                for (int j = 1; j < 10; j++) {
+                    uint64_t traffic = top_connections[j]->rx_speed +top_connections[j]->tx_speed; 
+                    if (traffic < min_traffic) {
+                        min_idx = j;
+                        min_traffic = traffic;
+                    }
+                }
 
-                // // Replace if current has more traffic
-                // uint64_t current_traffic = current->rx_speed + current->tx_speed;
-                // if (current_traffic > min_traffic) {
-                //     top_connections[min_idx] = current;
-                // }
-
-                // Implement sorting logic to keep only the top 10 connections
-                // for (int j = 0; j < 10; j++) {
-
-                //     top_connections[j] = current;
-                //     break;
-                // }
+                uint64_t current_traffic = current->rx_speed + current->tx_speed;
+                if (current_traffic > min_traffic) {
+                    top_connections[min_idx] = current;
+                }
             }
             current = current->next;
         }
     }
+    qsort(top_connections, count, sizeof(connection_stats_t *), compare);
 
-    // qsort(top_connections, count, sizeof(connection_stats_t *), compare);
 
-    // Print each of the top connections
+    
     for (int i = 0; i < count; i++) {
         connection_stats_t *conn = top_connections[i];
 
@@ -244,8 +206,8 @@ void print_top_connections() {
         format_ip_port(conn->key.protocol, conn->key.dst_ip, conn->key.dst_port, dst_ip_port,
                        DST_IP_PORT_WIDTH);
 
-        if ((conn->rx_speed != 0 || conn->tx_speed != 0) ||
-            (difftime(now, conn->last_active) < 5.0)) {
+        if ((conn->rx_speed != 0 && conn->tx_speed != 0) ||
+            (difftime(now, conn->update_time) < 5.0)) {
 
             if (strcmp(conn->key.protocol, "icmp") == 0) {
                 printw("%-*s %-*s %-*s %*s %*s %*s %*s\n", SRC_IP_PORT_WIDTH, conn->key.src_ip,
@@ -272,37 +234,31 @@ void *display_loop(void *args) {
     return NULL;
 }
 
-connection_stats_t merge(connection_stats_t *connection1, connection_stats_t *connection2,
-                         bool same_addrs) {
+connection_stats_t merge(connection_stats_t *connection1, connection_stats_t *connection2) {
 
     connection_stats_t merged_connection;
 
-    // Kopírování klíčových hodnot (src/dst IP, porty, protokol)
+    
     strcpy(merged_connection.key.src_ip, connection1->key.src_ip);
     merged_connection.key.src_port = connection1->key.src_port;
     strcpy(merged_connection.key.dst_ip, connection1->key.dst_ip);
     merged_connection.key.dst_port = connection1->key.dst_port;
     strcpy(merged_connection.key.protocol, connection1->key.protocol);
 
-    if (same_addrs) {
-        merged_connection.tx_packets = connection1->tx_packets / 2;
-        merged_connection.tx_bytes = connection1->tx_bytes / 2;
-        merged_connection.rx_packets = connection1->tx_packets / 2;
-        merged_connection.rx_bytes = connection1->tx_bytes / 2;
-    } else {
-        merged_connection.tx_packets = connection1->tx_packets;
-        merged_connection.tx_bytes = connection1->tx_bytes;
-        merged_connection.rx_packets = connection2->tx_packets;
-        merged_connection.rx_bytes = connection2->tx_bytes;
-    }
+   
+    merged_connection.tx_packets = connection1->tx_packets;
+    merged_connection.tx_bytes = connection1->tx_bytes;
+    merged_connection.rx_packets = connection2->tx_packets;
+    merged_connection.rx_bytes = connection2->tx_bytes;
+    
 
     merged_connection.update_time = connection1->update_time;
-    merged_connection.last_active = connection1->last_active;
+    
 
     return merged_connection;
 }
 
-pcap_t *create_pcap_handle(char *interface) // TODO edit
+pcap_t *create_pcap_handle(char *interface) 
 {
     pcap_t *created_handle = NULL;
     struct bpf_program bpf;
@@ -314,7 +270,9 @@ pcap_t *create_pcap_handle(char *interface) // TODO edit
     // Get network interface source IP address and network_mask.
     if (pcap_lookupnet(interface, &source_ip, &network_mask, error_buffer) == PCAP_ERROR) {
         fprintf(stderr, "pcap_lookupnet: %s\n", error_buffer);
-        return NULL;
+        endwin();
+        exit(0);
+        
     }
 
     // Open the interface for live capture.
@@ -322,25 +280,28 @@ pcap_t *create_pcap_handle(char *interface) // TODO edit
     created_handle = pcap_open_live(interface, BUFSIZ, 1, 1000, error_buffer);
     if (created_handle == NULL) {
         fprintf(stderr, "pcap_open_live(): %s\n", error_buffer);
-        return NULL;
+        endwin();
+        exit(0);
     }
 
     // Convert the packet filter epxression into a packet filter binary.
     if (pcap_compile(created_handle, &bpf, filter, 1, network_mask) == PCAP_ERROR) {
         fprintf(stderr, "pcap_compile(): %s\n", pcap_geterr(created_handle));
-        return NULL;
+        endwin();
+        exit(0);
     }
 
     // Bind the packet filter to the libpcap created_handle.
     if (pcap_setfilter(created_handle, &bpf) == PCAP_ERROR) {
         fprintf(stderr, "pcap_setfilter(): %s\n", pcap_geterr(created_handle));
-        return NULL;
+        endwin();
+        exit(0);
     }
 
     return created_handle;
 }
 
-void get_link_header_len(pcap_t *handle) // TODO edit
+void get_link_header_len(pcap_t *handle) 
 {
     int link_type;
 
@@ -366,8 +327,7 @@ void get_link_header_len(pcap_t *handle) // TODO edit
         break;
 
     default:
-        printf("Unsupported datalink (%d)\n", link_type);
-        header_length = 0;
+        return;
     }
 }
 
@@ -418,6 +378,8 @@ void packet_handler(u_char *user, const struct pcap_pkthdr *packethdr, const u_c
             key.dst_port = 0;
             strcpy(key.protocol, "icmp");
             break;
+        default:
+            return;
         }
     } else if (((struct ip6_hdr *)packetptr)->ip6_vfc >> 4 == 6) {
         // IPv6 packet
@@ -451,17 +413,38 @@ void packet_handler(u_char *user, const struct pcap_pkthdr *packethdr, const u_c
             strcpy(key.protocol, "icmpv6");
 
             break;
+        default:
+            return;
         }
+    } else {
+
+        return;
     }
 
-    // Update the hash table with the packet length.
+
     insert_or_update(&key, packethdr->len);
 }
 
-void stop_capture(int signo) // TODO edit
+void stop_capture(int signo) 
 {
 
     endwin();
+
+    // Print all connections before cleanup
+    // printf("\nFinal connection statistics:\n");
+    // printf("%-45s %-45s %-10s %-15s %-15s %-15s %-15s\n", "Source", "Destination", "Protocol",
+    //        "Rx Bytes", "Rx Packets", "Tx Bytes", "Tx Packets");
+    // printf("---------------------------------------------------------------------------------------"
+    //        "------------------\n");
+
+    for (int i = 0; i < HASH_SIZE; i++) {
+        connection_stats_t *current = hash_table[i];
+        while (current != NULL) {
+            printf("%-45s %-45s %-10s \n", current->key.src_ip, current->key.dst_ip,
+                   current->key.protocol);
+            current = current->next;
+        }
+    }
 
     if (pcap_handle != NULL) {
         pcap_close(pcap_handle);
@@ -486,7 +469,6 @@ int main(int argc, char *argv[]) {
     order = 'b';
 
     if (argc != 3 && argc != 5) {
-        // free(interface) ;
         printf("Usage: %s -i <interface> [-s b/p]\n", argv[0]);
 
         exit(0);
@@ -507,7 +489,7 @@ int main(int argc, char *argv[]) {
 
     interface = argv[2];
 
-    // Initialize ncurses
+    
     initscr();
     cbreak();
     noecho();

@@ -1,13 +1,20 @@
 #ifndef HASHTABLE_H
 #define HASHTABLE_H
 
+
 #include <stdint.h>
-#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <time.h>
 
+#define HASH_SIZE 1024
 
+typedef struct connection_stats connection_stats_t;
+
+extern connection_stats_t *hash_table[HASH_SIZE];
 
 typedef struct connection_key {
     char src_ip[INET6_ADDRSTRLEN];
@@ -29,7 +36,7 @@ typedef struct connection_stats {
     time_t rx_speed;
     time_t rx_packet_speed;
     struct connection_stats *next;
-    time_t last_active;
+    // time_t last_active;
 
 } connection_stats_t;
 

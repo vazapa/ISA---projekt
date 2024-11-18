@@ -31,20 +31,11 @@
 \newpage
 
 \section{Úvod}
-Tento dokument popisuje implementaci programu \texttt{isa-top}, který slouží k monitorování síťových toků v reálném čase. Program zachycuje síťový provoz a zobrazuje statistiky přenosu dat pro jednotlivá spojení, podobně jako utilita \texttt{top}.
+% Tento dokument popisuje implementaci programu \texttt{isa-top}, který slouží k monitorování síťových toků v reálném čase. Program zachycuje síťový provoz a zobrazuje statistiky přenosu dat pro jednotlivá spojení, podobně jako utilita \texttt{top}.
+Tento dokument popisuje implementaci programu \texttt{isa-top}, který je využíván k zobrazení statistik o síťovém provozu v terminálu.
+
 
 \section{Návrh aplikace}
-\subsection{Požadavky}
-Program musí:
-\begin{itemize}
-    \item Zachytávat síťový provoz pomocí knihovny libpcap
-    \item Zobrazovat statistiky v reálném čase
-    \item Podporovat IPv4 i IPv6 adresy
-    \item Sledovat TCP, UDP a ICMP protokoly
-    \item Umožňovat řazení podle přenesených bajtů nebo paketů
-\end{itemize}
-
-\subsection{Architektura}
 Program je rozdělen do několika hlavních komponent:
 \begin{itemize}
     \item Zachytávání paketů (libpcap)

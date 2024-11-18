@@ -1,24 +1,31 @@
 #ifndef ISA_TOP_H
 #define ISA_TOP_H
-#include <ncurses.h>
-#include <netinet/ip6.h>
-#include <netinet/ip_icmp.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
+
+#include <sys/types.h>
+#include <arpa/inet.h>
+
 #include <pcap/pcap.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 
+#include <netinet/ip.h>
+#include <netinet/ip6.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
+
+#include <ncurses.h>
+#include <pthread.h>
+
 #include "hashtable.h"
 
-connection_stats_t merge(connection_stats_t *connection1, connection_stats_t *connection2,
-                         bool same_addrs);
+connection_stats_t merge(connection_stats_t *connection1, connection_stats_t *connection2);
 pcap_t *create_pcap_handle(char *interface);
 void get_link_header_len(pcap_t *handle);
 void packet_handler(u_char *user, const struct pcap_pkthdr *packethdr, const u_char *packetptr);

@@ -1,15 +1,11 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11
-LDFLAGS = -lncurses -lpcap
+CFLAGS = -Wall -Wextra
+LDFLAGS = -lpcap -lncurses -pthread
 TARGET = isa-top
 SRCS = isa-top.c hashtable.c
-OBJS = $(SRCS:.c=.o)
 
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS) $(LDFLAGS)
-
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+$(TARGET): $(SRCS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS) $(LDFLAGS)
 
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f $(TARGET)
