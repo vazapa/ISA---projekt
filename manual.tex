@@ -35,16 +35,8 @@
 Tento dokument popisuje implementaci programu \texttt{isa-top}, který je využíván k zobrazení statistik o síťovém provozu v terminálu.
 
 
-\section{Návrh aplikace}
-Program je rozdělen do několika hlavních komponent:
-\begin{itemize}
-    \item Zachytávání paketů (libpcap)
-    \item Správa spojení (hash tabulka)
-    \item Výpočet statistik
-    \item Uživatelské rozhraní (ncurses)
-\end{itemize}
-
 \section{Implementace}
+Program je rozdělen do několika hlavních komponent:
 \subsection{Datové struktury}
 Program používá následující klíčové datové struktury:
 \begin{itemize}
@@ -52,23 +44,18 @@ Program používá následující klíčové datové struktury:
     \item \texttt{connection\_stats\_t} - statistiky spojení (počty bajtů, paketů, rychlosti)
     \item Hash tabulka pro ukládání aktivních spojení
 \end{itemize}
+\subsection{Vlákna}
+Z důvodu optimálního a správného výpisu jsou zde využity 2 vlákna vytvořeny pomocí funkce \texttt{pthread\_create}. Tedy jedno vlákno pro výpočet statistik a druhé pro jejich zobrazování pomocí knihovny \texttt{ncurses}.
+\subsection{Zachytávání paketů (libpcap)}
+Zde je využívana knihovna libpcap, která umožňuje sledovat pakety v síti. Funkce \texttt{create\_pcap\_handle} inicializuje zachytávání na specifikovaném síťovém rozhraní a nastavuje potřebné parametry. Funkce \texttt{packet\_handler}, která je v nekonečné smyčce pomocí \texttt{pcap\_loop}, zpracovává pakety a následně z nich extrahuje informace pro pozdější použití. 
 
-\subsection{Zpracování paketů}
-Implementace zahrnuje:
-\begin{itemize}
-    \item Parsování IP hlaviček (IPv4/IPv6)
-    \item Identifikace protokolů (TCP/UDP/ICMP)
-    \item Výpočet přenosových rychlostí
-    \item Správu aktivních spojení
-\end{itemize}
+\subsection{Správa spojení (hash tabulka)}
+Každé spojení je identifikováno klíčem \texttt{connection\_key\_t}, který obsahuje zdrojovou a cílovou IP adresu, porty a protokol. Tato struktura umožnuje efektivně pracovat se spojeními, které se zde slučují do jedné v případě obousměrné komunikace. Funkce jako \texttt{insert\_or\_update}, \texttt{find} a \texttt{delete} jsou použity pro manipulaci se spojeními v hash tabulce. Když je zachycen nový paket, tato část kódu aktualizuje statistiky příslušného spojení nebo vytvoří nové spojení, pokud dosud neexistuje.
+\subsection{Výpočet statistik}
+Statistiky zahrnují počet přenesených bajtů a paketů, rychlost přenosu dat a rychlost přenosu paketů. Výpočet statistik se provádí v reálném čase na základě zachycených paketů. Funkce \texttt{update\_speed} aktualizuje rychlosti přenosu dat a paketů pro každé spojení. Kód také zajišťuje, že statistiky jsou pravidelně aktualizovány a stará spojení jsou odstraněna, pokud nejsou aktivní.
 
-\subsection{Zajímavé části implementace}
-\begin{itemize}
-    \item Sloučení obousměrného provozu pro jedno spojení
-    \item Formátování rychlostí (K/M/G jednotky)
-    \item Řešení localhost spojení
-    \item Aktualizace statistik v reálném čase
-\end{itemize}
+\subsection{Uživatelské rozhraní (ncurses)}
+Kód zobrazuje seznam aktivních spojení a jejich statistiky v přehledné tabulce. Funkce \texttt{print\_top\_connections} zobrazuje top 10 spojení s nejvyšší přenosovou rychlostí. Uživatelské rozhraní je pravidelně aktualizováno pomocí vlákna \texttt{display\_loop}, aby zobrazovalo aktuální statistiky v reálném čase.
 
 \section{Použití programu}
 \subsection{Kompilace}
@@ -89,25 +76,16 @@ Parametry:
 \end{itemize}
 
 \section{Testování}
-\subsection{Testovací prostředí}
-\begin{itemize}
-    \item Různá síťová rozhraní
-    \item IPv4 a IPv6 provoz
-    \item TCP, UDP a ICMP protokoly
-    \item Vysoké datové toky
-\end{itemize}
-
-\subsection{Výsledky testů}
-\begin{itemize}
-    \item Správné zobrazení IPv4/IPv6 adres
-    \item Přesnost měření přenosových rychlostí
-    \item Stabilita při dlouhodobém běhu
-    \item Správné řazení spojení
-\end{itemize}
+Testování probíhalo 2 způsobmi.
+\subsection{Ping a Wireshark}
+Nejdříve jsem využíval nástroje \texttt{ping}, z několika různých terminálů. Komunikace byla odchytávána pomocí nástroje \texttt{wireshark}.
+Toto mi umožnilo určit zdá je zobrazován správný počet bajtů a paketů za sekundu.
+\subsection{Iftop}
+Pomocí nástroje \texttt{Iftop}, který je velmi podobný \texttt{isa-top} jsem mohl statistiky porovnat a určit zda se rychlosti podobají.
 
 \section{Literatura}
 \begin{enumerate}
-    \item STEVENS, W. Richard. TCP/IP Illustrated, Volume 1: The Protocols
+    \item https://vichargrave.github.io/programming/develop-a-packet-sniffer-with-libpcap/
     \item Dokumentace knihovny libpcap
     \item Dokumentace knihovny ncurses
 \end{enumerate}

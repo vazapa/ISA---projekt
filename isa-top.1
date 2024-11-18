@@ -1,0 +1,82 @@
+.TH ISA-TOP 1 "Listopad 2024" "Verze 1.0" "Uživatelské příkazy"
+.SH JMÉNO
+isa-top \- Nástroj pro monitorování statistik síťového provozu v reálném čase
+
+.SH SYNOPSE
+.B isa-top
+.RB \-i
+.IR rozhraní
+.RB [ \-s
+.IR b/p ]
+
+.SH POPIS
+.B isa-top
+nástroj pro sledování síťového provozu a vypisování statistik o rychlosti různých spojení
+
+.SH MOŽNOSTI
+.TP
+.B \-i
+Specifikace síťové rozhraní
+.TP
+.B \-s
+Způsob třídění statistik. 
+.RS
+.IP \fBb\fR
+Bajty za sekundu (výchozí).
+.IP \fBp\fR
+Paketů za sekundu.
+.RE
+
+.SH POUŽITÍ
+Pro kompilaci programu spusťte:
+.EX
+make
+.EE
+
+.SH PŘÍKLADY
+Pro monitorování síťového provozu na rozhraní `en0` a třídění podle bajtů za sekundu:
+.B isa-top
+.RB \-i
+.IR en0
+.RB \-s
+.IR b 
+
+Pro monitorování síťového provozu na rozhraní `lo0` a třídění podle paketů za sekundu:
+.B isa-top
+.RB \-i
+.IR lo0
+.RB \-s
+.IR p 
+
+.SH SOUBORY
+.TP
+.B isa-top
+Spustitelný soubor programu `isa-top`.
+.TP
+.B Makefile
+Makefile použitý pro kompilaci programu.
+.TP
+.B hashtable.c
+Zdrojový soubor obsahující implementaci hash tabulky.
+.TP
+.B hashtable.h
+Hlavičkový soubor obsahující deklarace pro hash tabulku.
+.TP
+.B isa-top.c
+Zdrojový soubor obsahující hlavní logiku programu.
+.TP
+.B isa-top.h
+Hlavičkový soubor obsahující deklarace pro hlavní logiku programu.
+.TP
+.B utils.c
+Zdrojový soubor obsahující pomocné funkce.
+.TP
+.B utils.h
+Hlavičkový soubor obsahující deklarace pomocných funkcí.
+
+.SH VIZ TAKÉ
+.BR pcap (3),
+.BR ncurses (3)
+
+.SH AUTOR
+Václav Zapletal (xzaple40)
